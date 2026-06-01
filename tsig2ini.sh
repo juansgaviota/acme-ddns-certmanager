@@ -17,38 +17,41 @@ usage () {
     echo ""
 }
 
-infile=""
-outfile=""
-case $# in
-    3 ) outfile=$3; infile=$2 ;;
-    2 ) outfile="/dev/stdout"; infile=$2 ;;
-    1 ) outfile="/dev/stdout"; infile="/dev/stdin" ;;
-    * ) usage; exit 1 ;;
-esac
+infile="$2"
+outfile="$3"
+# comprobamos argumentos
+[ -z "$3" ] && outfile="/dev/stdout"
+[ -z "$2" ] && infile="/dev/stdin"
+[ -z "$1" ] && ( usage; exit 1; )
 
-if [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+# comprobamos que el servidor venga en formato ipv4
+ip_regex="^([0-9]{1,3}\.){3}[0-9]{1,3}$"
+if [[ ! $1 =~ $ip_regex ]]; then
+    echo "$1 must be an ipv4 address"
     usage
     exit 1
 fi
+# extraemos nombre, algoritmo y clave
+data=( $(sed -e 's/;//g' ${infile} | awk '
+    BEGIN { key=""; algorithm=""; secret=""; } 
+    /key/{ key=$2; }
+    /algorithm/ { algorithm=$2; }
+    /secret/ { secret=$2}
+    END { printf ("%s\n\"%s\"\n%s\n",key,algorithm,secret); }
+'))
 
-cat "${infile}"| awk '
-/key/{ print $2; }
-/algorithm/ { print $2; }
-/secret/ {print $2;}    
-' | read key algorihtm secret 
-
-read -r -d '' ini_data << __EOF
-[__KEYNAME__]
+cat << __EOF >${outfile}
+[${data[0]}]
 # Target DNS server (IPv4 or IPv6 address, not a hostname)
-dns_rfc2136_server = __DNS_SERVER__
+dns_rfc2136_server = ${1}
 # Target DNS port
 dns_rfc2136_port = 53
 # TSIG key name
-dns_rfc2136_name = __KEY_NAME__
+dns_rfc2136_name = ${data[0]}
 # TSIG key secret (base64 encoded)
-dns_rfc2136_secret = __KEY_SECRET__
+dns_rfc2136_secret = ${data[2]}
 # TSIG key algorithm
-dns_rfc2136_algorithm = __KEY_ALGORITHM__
+dns_rfc2136_algorithm = ${data[1]}
 # TSIG sign SOA query (optional, default: false)
 dns_rfc2136_sign_query = false
 __EOF
