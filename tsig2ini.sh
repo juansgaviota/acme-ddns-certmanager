@@ -32,22 +32,22 @@ if [[ ! $1 =~ $ip_regex ]]; then
     exit 1
 fi
 # extraemos nombre, algoritmo y clave
-data=( $(sed -e 's/;//g' ${infile} | awk '
+data=( $(sed -e 's/;//g' "${infile}" | awk '
     BEGIN { key=""; algorithm=""; secret=""; } 
-    /key/{ key=$2; }
+    /key/{ gsub( /"/,"",$2); key=$2;}
     /algorithm/ { algorithm=$2; }
     /secret/ { secret=$2}
     END { printf ("%s\n\"%s\"\n%s\n",key,algorithm,secret); }
 '))
 
-cat << __EOF >${outfile}
+cat << __EOF >"${outfile}"
 [${data[0]}]
 # Target DNS server (IPv4 or IPv6 address, not a hostname)
 dns_rfc2136_server = ${1}
 # Target DNS port
 dns_rfc2136_port = 53
 # TSIG key name
-dns_rfc2136_name = ${data[0]}
+dns_rfc2136_name = "${data[0]}"
 # TSIG key secret (base64 encoded)
 dns_rfc2136_secret = ${data[2]}
 # TSIG key algorithm
