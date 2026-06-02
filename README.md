@@ -110,7 +110,7 @@ en el DNS
 Ejemplo de utilización:
 - Generar clave y guardar en el servidor dns
 
-`root@dns-server# tsig-keygen -a hmac-sha256 > /etc/bind/ddns-key.conf`
+`root@dns-server# tsig-keygen -a hmac-sha256 "ddns-key" > /etc/bind/ddns-key.conf`
 
 - Con la utilidad tsig2ini.sh generar datos para el fichero ddns-keys.ini
 
