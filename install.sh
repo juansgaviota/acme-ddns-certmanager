@@ -75,11 +75,12 @@ done
 for i in ${docfiles}; do
     "${INSTALL}" -o root -g root -m 644 "$i" /usr/share/doc/certmanager/"$i"
 done
+which -s md2html && md2html README.md -o /usr/share/doc/certmanager/README.html
 
 echo ""
 echo "Instalacion completada."
 echo "Instrucciones de configuración y uso en /usr/share/doc/certmanager"
-echo "Pulse \"certmanager.sh --help para ver opciones"
+echo "Pulse \"certmanager.sh --help\" para ver opciones"
 
 # esto es todo, amigos
 exit 0

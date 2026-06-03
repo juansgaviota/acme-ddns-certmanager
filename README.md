@@ -1,16 +1,16 @@
-# Acme-ddns-certmanager
+# CertManager
 
-Utilidad para gestión centralizada y distribución de certificados generados con ACME, certbot y basada en validación DNS-01
+Utilidad para gestión centralizada y distribución de certificados generados con API ACME, certbot mediante validación DNS-01
 
-## Descripción:
+## Descripción
 
-Este script permite centralizar en un único servidor la solicitud, y renovación de certificados mediante certbot/ACME mediante validación por DNS, sin necesidad de que el servidor tenga que estar accesible por HTTP
+Este script permite centralizar en un único servidor la solicitud, y renovación de certificados mediante certbot/ACME mediante validación por DNS, sin necesidad de que el servidor tenga que estar accesible por HTTPs
 
 Asímismo se controla la copia y distribución de los certificados obtenidos a cada servidor que los requiera
 
 Se pueden manejar certificados de múltiples hosts, múltiples servidores DNS, así como declarar las claves de acceso al ddns-update de cada servidor dns y las credenciales ACME que utilizará cada certificado
 
-## Estructura:
+## Estructura
 - certmanager.sh
     Script de gestión
 - lib_ini.sh:
@@ -18,6 +18,8 @@ Se pueden manejar certificados de múltiples hosts, múltiples servidores DNS, a
 - tsig2ini.sh:
     Utilidad para conversión de ficheros creados con tsig-genkey
     al formato .ini utilizado por certmanager
+- install.sh
+    Programa de (des)instalación de la aplicación
 - etc/acme_creds.ini
     Fichero de credenciales de acceso del usuario ACME
 - etc/ddns_keys.ini
@@ -27,12 +29,41 @@ Se pueden manejar certificados de múltiples hosts, múltiples servidores DNS, a
     Fichero de declaración de diversos certificados a gestionar por la aplicación
 
 ## Instalación
-Para instalar la aplicación
-- Descargar y descomprimir el fichero desde github
-- Como usuario "root" ejecutar *install.sh*
-- Seguir las instrucciones para configurar los diversos ficheros de configuración, así como configurar DNS para que permita validación DNS-01
+**NOTA**: Esta aplicación ha sido instalada y probada en sistemas Debian-13 y Ubuntu-24.04. Es posible que otras distribuciones de linux requieran otros paquetes y/o modos de instalación
 
+### Requisitos previos
+
+CertManager requiere de *certbot* >= 4.4 para su ejecución, así como del plugin *python3-certbot-dns-rfc2136*
+
+En sistemas Debian 12 o superior, los paquetes vienen incluídos en la distribución base:
+> sudo apt install -y certbot python3-certbot-dns-rfc2136
+
+En sistemas Ubuntu, es necesario instalar los paquetes mediante *snap*, pues la versión que viene en la distribución base está desactualizada y no es operativa:
+> sudo snap install certbot certbot-dns-rfc2136
+
+Para generar (Opcional) la versión HTML de este documento en la carpeta 
+de documentación, es preciso instalar el paquete *md2html*
+> sudo apt install md2html
+
+### Descarga e instalación
+
+Para instalar la aplicación:
+
+- Descargar y descomprimir el fichero desde github
+    > wget https://github.com/jonsito/acme-ddns-certmanager/archive/refs/heads/main.zip
+
+    > unzip main.zip
+
+- Alternativamente, si se dispone de "git" se puede clonar el repositorio
+    > git clone https://github.com/jonsito/acme-ddns-certmanager.git
+
+- Como usuario "root" ejecutar *install.sh*
+
+- Una vez instalado, seguir las instrucciones para personalizar los diversos ficheros de configuración, así como configurar DNS para que permita validación DNS-01
 **IMPORTANTE** los ficheros bajo la carpeta /etc/certmanager deben estar con permisos root:root y protegidos contra lectura/escritura pública
+
+- La instalación de certbot programa automáticamente un timer para ejecutar dicha aplicación de manera periódica. Puesto que en este caso certbot se ejecuta desde CertManager, hay que desactivar dicho timer:
+> sudo systemctl disable --now certbot.timer
 
 ## Ejecución
 
@@ -59,13 +90,15 @@ Usage: ./certmanager.sh options
   -r | --renove <name>    Force renove certificate <name>
   -e | --expire <days>    Renew when <days> before expiration
                           (def: 30 days)
-  -m | --mail             Send log via mail to admin
+  -m | --mail <dest>      Send log via mail to <dest>
   -i | --install          Install certificate to (remote) server
-                          (default is do not install )
+                          (default is do not install)
 ```
+
 ## Configuración
 
 ### Fichero de credenciales ACME (acme-creds.ini)
+
 ```
 # acme_creds.ini
 # Fichero .ini que contiene las credenciales de acceso vía ACME
@@ -81,8 +114,9 @@ acme_hmac_key = "ACME EAB user hmac key"
 acme_server = "https://acme-v02.harica.gr/acme/codigo_del_usuario/directory"
 acme_email = "direccion.de.correo@example.com"
 #
-# letsencrypt no utiliza credenciales (utiliza credenciales generados internamente en el cliente certbot), por lo que podemos dejar kid y hmac_key
-# vacios
+# letsencrypt no utiliza credenciales (utiliza credenciales generados
+# internamente en el cliente certbot), por lo que podemos dejar kid y
+# hmac_key vacios
 [letsencrypt]
 acme_kid = ""
 acme_hmac_key = ""
@@ -93,7 +127,8 @@ acme_email = "email.del.usuario@example.com"
 # ...
 #
 ```
-### Configuración DDNS ( plugin python3-certbot-dns-rfc2136 )
+
+### Configuración DNS ( plugin python3-certbot-dns-rfc2136 )
 
 En CertManager se usa el plugin certbot-dns-rfc2136 para acceder
 a cada servidor dns y añadir los campos TXT que se requieren para la validación ACME DNS-01.
@@ -122,6 +157,7 @@ Ejemplo de utilización:
 - Configurar el servidor DNS para que admita dns dinámico
 
 `root@dnsserver# vi /etc/bind/named.conf.local`
+
 ```
 ...
 include "/etc/bind/ddns-key.conf"
@@ -144,6 +180,7 @@ zone "example.es" {
 };
 ...
 ```
+
 En el ejemplo vemos que se pueden usar las opciones "allow-update", especificando host y clave, o bien la opción "update-policy" que permite un ajuste más fino por dominios y campos que se puedan actualizar
 
 La estructura del fichero de claves ddns utilizado por certmanager.sh es la siguiente
@@ -226,4 +263,19 @@ cert_alt_names = ""
 cert_enabled = 0
 ```
 
+## Renovación automática de certificados
+
+CertManager puede utilizarse para renovar y distribuir automáticamente los
+certificados. Para ello utilizaremos el servicio **cron**, editando el fichero *crontab* correspondiente
+
+Por ejemplo para procesar semanalmente, y en su caso renovar los certificados próximos a caducar antes de 30 días, generaremos una línea en el crontab
+tal que sigue:
+
+> crontab -e
+
+```
+...
+0 6 * * 0 /usr/local/bin/certmanager.sh --renove-all --expire 30 --install --mail <certadmin@example.com>
+...
+```
 
