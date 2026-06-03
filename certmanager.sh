@@ -16,24 +16,32 @@ License="MIT (https://opensource.org/license/mit)"
 SSH="/usr/bin/ssh -n -q -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes -o LogLevel=ERROR "
 SCP="/usr/bin/scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o LogLevel=ERROR "
 # para ejecutar tar remoto con ssh necesitamos mantener abierto stdin
-TARSSH="/usr/bin/ssh -q -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o LogLevel=ERROR"
+# TARSSH="/usr/bin/ssh -q -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o LogLevel=ERROR"
 
-# Base directory
-BASE="$(dirname $0)"
+# Directories
+BASE="$(dirname "$0")"
+CONFDIR="/etc/certmanager"
+LIBDIR=/usr/local/lib/certmanager
+DOCDIR=/usr/share/doc/certmanager
+TMPDIR=/tmp/certmanager
+LOGDIR=/var/log/certmanager
 
 # Ini parser library script
 # https://github.com/lsferreira42/bash-ini-parser
-ini_parser=${BASE}/lib_ini.sh
+ini_parser=${LIBDIR}/lib_ini.sh
 
 # Fichero .ini que contiene las credenciales de acceso a HARICA-ACME
-acme_creds="${BASE}/acme.ini"
+acme_creds="${CONFDIR}/acme_creds.ini"
 
-# fichero .ini que contiene los datos de DDNS y de ubicacion para cada certificado
-sites_info="${BASE}/sites.ini"
+# Fichero .ini que contiene los datos de DDNS y de ubicacion para cada certificado
+sites_info="${CONFDIR}/sites.ini"
+
+# Fichero .ini que contiene las claves de acceso al servidor DNS para la validación ACME
+ddns_keys="${CONFDIR}/ddns_keys.ini"
 
 # directorio de ficheros temporales
-tmp_dir="${BASE}/tmp"
-log_dir="${tmp_dir}"
+tmp_dir="${TMPDIR}"
+log_dir="${LOGDIR}"
 # fichero de logs
 log_file="${log_dir}/cert_manager.$$.log"
 # fichero de bloqueo
@@ -42,9 +50,8 @@ lock_file=${tmp_dir}/certmanager.lock
 # Valores por defecto
 verbose=0	# show log in console
 action=""	# Action to perform when this script is executed
-expire=30	# days before expiration to perform renewal	
 user="default"  # user section in credentials file to retrieve data from
-mailto=0	# on execution send log to CdC (cdc_dit@autolistas.upm.es)
+mailto=""	# on execution send log to provided mail address
 install=0	# re-distribute new created certificates
 enabled=1	# mark named site entry enabled/disabled
 
@@ -54,8 +61,8 @@ acme_hmac_key=""	# HMAC key
 acme_server=""		# remote URI to handle certificates
 acme_email=""		# email to send notifications to
 
-# variables relacionadas con las operaciones de DDNS
-dns_credentials="" 	# fichero de configuracion de acceso al servidor DNS
+ddns_credentials=""	# seccion de configuracion DDNS en el fichero ddns_keys.ini
+acme_credentials=""	# seccion de configuracion ACME EAB en el fichero acme_creds.ini
 
 # datos de host y carpetas destino donde instalar el certificado
 cert_host="" 		# host donde instalar el certificado
@@ -71,19 +78,19 @@ cert_enabled="" 	# flag para procesar o no esta seccion del sites_info
 
 # send extra info to log file
 trace() {
-	echo $* >>${log_file}
+	echo "$*" >>${log_file}
 } 
 
 # send message to log file. When verbose send also to console
 log () {
-	echo $* >>${log_file}
-	[ ${verbose} -eq 1 ] && echo $* >&2
+	echo "$*" >>${log_file}
+	[ ${verbose} -eq 1 ] && echo "$*" >&2
 }
 
 # send message to log file AND console
 error() {
-	echo $* >&2
-	echo $* >>${log_file}
+	echo "$*" >&2
+	echo "$*" >>${log_file}
 }
 
 # parse sites ini file to get information from cert
@@ -94,45 +101,62 @@ error() {
 #   2: site is not enabled
 #   3: missing data
 parse_site () {
-        trace "Enter parse_site( '$1' )"
-	if ! ini_section_exists ${sites_info} $1 ; then
+        trace "Enter parse_site( \"$1\" )"
+	if [ ! -f "${sites_info}" ]; then
+		error "DNS and certs destination info file '$sites_info' does not exist"
+		return 1
+	elif ! ini_validate "${sites_info}" ; then
+		error "DNS and certs destination info '$sites_info' is not a valid .ini file"
+		return 1
+	elif ! ini_section_exists "${sites_info}" "$1" ; then
 		error "Certificate '$1' is not declared in ${sites_info}"
 		return 1
 	fi
-	cert_enabled=$(ini_read ${sites_info} $1 "cert_enabled" ) >&1
-	if [ ${cert_enabled} -ne 1 ];then
-		log "Certificate '$1' is not enabled"
+	# miramos si esta sección está habilitada para procesar o no el certificado. 
+	# Si no lo está, no es un error, pero no se procesa
+	cert_enabled=$(ini_read "${sites_info}" "$1" "cert_enabled" ) >&1
+	if [ "${cert_enabled}" -ne 1 ];then
+		log "Certificate \"$1\" is not enabled"
 		return 2
 	fi
-	# leemos los valores por defecto
-	dns_credentials=$(ini_read ${sites_info} "default" "dns_credentials")
-	key_path=$(ini_read ${sites_info} "default" "key_path")
-	cert_path=$(ini_read ${sites_info} "default" "cert_path")
-	chain_path=$(ini_read ${sites_info} "default" "chain_path")
-	# ahora los valores especificos del CN dado
-	cert_host=$(ini_read ${sites_info} $1 "cert_host")
-	cert_alt_names=$(ini_read ${sites_info} $1 "cert_alt_names")
+	# Entrada habilitada. Leemos los valores por defecto
+	ddns_credentials=$(ini_read "${sites_info}" "default" "ddns_credentials")
+	acme_credentials=$(ini_read "${sites_info}" "default" "acme_credentials")
+	key_path=$(ini_read "${sites_info}" "default" "key_path")
+	cert_path=$(ini_read "${sites_info}" "default" "cert_path")
+	chain_path=$(ini_read "${sites_info}" "default" "chain_path")
+
+	# Leemos ahora los valores especificos del CN dado
+	cert_host=$(ini_read "${sites_info}" "$1" "cert_host")
+	# el nombre CN del certificado es el mismo que el de la sección
+	cert_name="$1"
+	cert_alt_names=$(ini_read "${sites_info}" "$1" "cert_alt_names")
+	#
+	# Ahora buscamos en la seccion solicitada
 	# si estos valores no estan definidos, usamos los de por defecto
-	dns_credentials=$(ini_get_or_default ${sites_info} "$1" "dns_credentials" ${dns_credentials})
-	key_path=$(ini_get_or_default ${sites_info} "$1" "key_path" ${key_path})
-	cert_path=$(ini_get_or_default ${sites_info} "$1" "cert_path" ${cert_path})
-	chain_path=$(ini_get_or_default ${sites_info} "$1" "chain_path" ${chain_path})
-	# comprobamos que el fichero de configuración esté definido y exista
-	if [ -z ${dns_credentials} ]; then
-		error "Fichero de configuración DDNS no declarado"
-		return 3
-	elif [ ! -f ${dns_credentials} ]; then
-		error "fichero de configuracion DDNS '${dns_credentials}' no encontrado"
+	#
+	# nombre de la seccion donde buscar la dddns-key
+    ddns_credentials=$(ini_get_or_default "${sites_info}" "$1" "ddns_credentials" "${ddns_credentials}")
+	# credenciales ACME
+	acme_credentials=$(ini_get_or_default "${sites_info}" "$1" "acme_credentials" "${acme_credentials}")
+	# paths de instalación del certificado en el host destino
+	key_path=$(ini_get_or_default "${sites_info}" "$1" "key_path" "${key_path}")
+	cert_path=$(ini_get_or_default "${sites_info}" "$1" "cert_path" "${cert_path}")
+	chain_path=$(ini_get_or_default "${sites_info}" "$1" "chain_path" "${chain_path}")
+
+	# comprobamos que la clave ddns existan el fichero de credenciales ddns
+	if ! ini_section_exists "${ddns_keys}" "${ddns_credentials}"; then
+		error "Seccion de configuración DDNS \"$ddns_credentials}\" no existe"
 		return 3
 	fi
-	# comprobamos que el host destino está especificado
-	if [ -z "${cert_host}" ]; then
-		error "El host donde reside el certificado no está declarado" 
+	# comprobamos si las credenciales acme EAB están declaradas en el fichero de credenciales
+	if !  ini_section_exists "${acme_creds}" "${acme_credentials}"; then
+		error "Seccion de configuración ACME \"$acme_credentials}\" no existe"
 		return 3
 	fi
 	# por ultimo comprobamos que los paths de instalación estén declarados
 	# pues son necesarios cuando cert_enabled=1
-	if [ -z "${key_path}" -o -z "${cert_path}" -o -z "${chain_path}" ]; then
+	if [ -z "${key_path}" ] || [ -z "${cert_path}" ] || [ -z "${chain_path}" ]; then
 		error "Los directorios de instalación del certificado no están declarados"
 		return 3
 	fi
@@ -141,30 +165,31 @@ parse_site () {
 }
 
 # read and parse ACME EAB credentials .ini file
+# $1: user section in the .ini file to read credentials from
 parse_creds_file () {
     if [ ! -f "$acme_creds" ]; then
 		error "ACME EAB credentials file '$acme_creds' does not exist" >&2
 		exit 1
-    elif  ! ini_validate "$acme_creds" ; then
+    elif ! ini_validate "$acme_creds" ; then
 		# comprobamos si el fichero .ini es valido
 		error "ACME EAB credentials '$acme_creds' is not a valid .ini file" >&2
 		exit 1
-    elif	! (ini_list_sections $acme_creds | grep -q $user) ; then
+    elif ! (ini_list_sections "$acme_creds" | grep -q "$user") ; then
 		error "User '$user' is not declared in '$acme_creds'"
 		exit 1;
     else
 		# finalmente leemos credenciales
-		acme_kid=$(ini_read $acme_creds $user "acme_kid")
-		acme_hmac_key=$(ini_read $acme_creds $user "acme_hmac_key")
-		acme_server=$(ini_read $acme_creds $user "acme_server")
-		acme_email=$(ini_read $acme_creds $user "acme_email")
+		acme_kid=$(ini_read "$acme_creds" "$user" "acme_kid")
+		acme_hmac_key=$(ini_read "$acme_creds" "$user" "acme_hmac_key")
+		acme_server=$(ini_read "$acme_creds" "$user" "acme_server")
+		acme_email=$(ini_read "$acme_creds" "$user" "acme_email")
 		# y comprobamos que esten declaradas
-		if [ -z "$acme_kid" -o -z "$acme_hmac_key" -o -z "$acme_server" -o -z "$acme_email" ]; then
+		if [ -z "$acme_kid" ] || [ -z "$acme_hmac_key" ] || [ -z "$acme_server" ] || [ -z "$acme_email" ]; then
 			log "acme_kid: $acme_kid"
 			log "acme_hmac_key: $acme_hmac_key"
 			log "acme_server: $acme_server"
 			log "acme_email: $acme_email"
-			error "Incomplete data for user '$user'"
+			error "Incomplete ACME credentials data for user '$user'"
 			exit 1
 		fi
     fi 
@@ -172,20 +197,19 @@ parse_creds_file () {
 
 # install certificate in destination server
 # if server host is not defined in sites .ini file, notice and ignore
-# $1 certificate CN name (section in ini file)
+# $1: certificate CN name (section in ini file)
 install_certificate () {
-        trace "Enter install_certificate( '$1' )"
+        trace "Enter install_certificate( \"$1\" )"
 	# parse site. on error notify and return
-	parse_site $1
-	if [ $? -ne 0 ]; then
+	if ! parse_site "$1"; then
 		log "Install certificate into remote host disabled or not posible"
 		return
 	fi
 	fromdir="/etc/letsencrypt/live/${1}/"
-	${SCP} ${fromdir}/cert.pem ${cert_host}:${cert_path}/${1}_cert.pem	
-	${SCP} ${fromdir}/key.pem ${cert_host}:${key_path}/${1}_key.pem	
-	${SCP} ${fromdir}/fullchain.pem ${cert_host}:${chain_path}/${1}_chain.pem
-	${SSH} ${cert_host} update-ca-certificates
+	${SCP} "${fromdir}/cert.pem" "${cert_host}":"${cert_path}/${1}_cert.pem"	
+	${SCP} "${fromdir}/key.pem" "${cert_host}":"${key_path}/${1}_key.pem"
+	${SCP} "${fromdir}/fullchain.pem" "${cert_host}":"${chain_path}/${1}_chain.pem"
+	${SSH} "${cert_host}" update-ca-certificates
 }
 
 # remove certificate in destination server
@@ -194,15 +218,14 @@ install_certificate () {
 remove_certificate () {
 	trace "Enter remove_certificate( '$1' )"
 	# parse site. on error notify and return
-	parse_site $1
-	if [ $? -ne 0 ]; then
+	if ! parse_site "$1"; then
 		log "Remove certificate in remote host disabled or not posible"
 		return
 	fi
-	${SSH} ${cert_host} rm -f ${cert_path}/${1}_cert.pem	
-	${SSH} ${cert_host} rm -f ${key_path}/${1}_key.pem	
-	${SSH} ${cert_host} rm -f ${chain}/${1}_chain.pem	
-	${SSH} ${cert_host} update-ca-certificates
+	${SSH} "${cert_host}" rm -f "${cert_path}/${1}_cert.pem"
+	${SSH} "${cert_host}" rm -f "${key_path}/${1}_key.pem"
+	${SSH} "${cert_host}" rm -f "${chain_path}/${1}_chain.pem"
+	${SSH} "${cert_host}" update-ca-certificates
 }
 
 # List existing certificates
@@ -213,7 +236,7 @@ do_list () {
 		--server "${acme_server}" \
 		--eab-kid "${acme_kid}" \
 		--eab-hmac-key "${acme_hmac_key}" \
-		--email ${acme_email}
+		--email "${acme_email}"
 }
 
 # Create/renew a certificate
@@ -221,28 +244,28 @@ do_list () {
 do_create () {
 	trace "Enter do_create( '$1' )"
 	# parse sites ini file to retrieve certificate info
-	parse_site $1
-
+	parse_site "$1"
+	[ -z "${cert_alt_names}" ] || cert_alt_names="-d ${cert_alt_names}"
 	# call to certbot
 	certbot certonly \
 		--logs_dir ${log_dir} \
 		--dns-rfc2136 \
-		--dns-rfc2136-credentials ${dns_credentials} \
+		--dns-rfc2136-credentials "${ddns_credentials}" \
 		--dns-rfc2136-propagation-seconds 30 \
 		--preferred-challenges=dns-01 \
 		--server "${acme_server}" \
 		--eab-kid "${acme_kid}" \
 		--eab-hmac-key "${acme_hmac_key}" \
 		--email "${acme_email}" \
-		--cert-name $1 \
-		${cert_alt_names}
+		--cert-name "$1" \
+		"${cert_alt_names}"
 
 	# si se ha solicitado, copiamos los certificados 
 	# al servidor destino
-	[ ${install} -eq 1 ] && install_certificate $1
+	[ ${install} -eq 1 ] && install_certificate "$1"
 
 	# si no verboso borramos fichero temporal de configuración ddns
-	[ ${verbose} -eq 0 ] && rm -f ${dns_credentials}
+	[ ${verbose} -eq 0 ] && rm -f "${ddns_credentials}"
 }
 
 # delete a certificate
@@ -250,27 +273,27 @@ do_create () {
 do_delete () {
 	trace "Enter do_delete( '$1' )"
 	# parse sites ini file to retrieve certificate info
-	parse_site $1
+	parse_site "$1"
 	# revoke certificate (not really needed, but...)
-        do_revoke $1
+        do_revoke "$1"
 	# and call certbot to remove
         certbot delete \
                 --logs_dir ${log_dir} \
                 --dns-rfc2136 \
-                --dns-rfc2136-credentials ${dns_credentials} \
+                --dns-rfc2136-credentials "${ddns_credentials}" \
                 --dns-rfc2136-propagation-seconds 30 \
                 --preferred-challenges=dns-01 \
                 --server "${acme_server}" \
                 --eab-kid "${acme_kid}" \
                 --eab-hmac-key "${acme_hmac_key}" \
                 --email "${acme_email}" \
-                --cert-name $1
+                --cert-name "$1"
 	
 	# si install está activado, borramos el certificado en el host
-	[ ${install} -eq 1 ] && remove_certificate $1
+	[ ${install} -eq 1 ] && remove_certificate "$1"
 
 	# finalmente elimina la seccion asociada del fichero de configuración de sites
-	ini_remove_section ${sites_info} $1
+	ini_remove_section "${sites_info}" "$1"
 }
 
 # revoke certificate
@@ -278,62 +301,62 @@ do_delete () {
 do_revoke () {
 	trace "Enter do_revoke( '$1' )"
 	# parse sites ini file to retrieve certificate info
-	parse_site $1
+	parse_site "$1"
 	# and call certbot to remove
         certbot revoke \
                 --logs_dir ${log_dir} \
                 --dns-rfc2136 \
-                --dns-rfc2136-credentials ${dns_credentials} \
+                --dns-rfc2136-credentials "${ddns_credentials}" \
                 --dns-rfc2136-propagation-seconds 30 \
                 --preferred-challenges=dns-01 \
                 --server "${acme_server}" \
                 --eab-kid "${acme_kid}" \
                 --eab-hmac-key "${acme_hmac_key}" \
                 --email "${acme_email}" \
-                --cert-name $1
+                --cert-name "$1"
 
 	# disable entry from sites file
-	ini_write ${sites_info} $1 "cert_enabled" 0
+	ini_write "${sites_info}" "$1" "cert_enabled" 0
 }
 
 # Force certificate renewal
 # $1 name of certificate to be renoved
 do_renove () {
-	trace "Enter do_renove( '$1' )"
+	trace "Enter do_renove( \"$1\" )"
         # parse sites ini file to retrieve certificate info
-        parse_site $1
+        parse_site "$1"
 
         # call to certbot
         certbot renew \
                 --logs_dir ${log_dir} \
                 --dns-rfc2136 \
-                --dns-rfc2136-credentials ${dns_credentials} \
+                --dns-rfc2136-credentials "${ddns_credentials}" \
                 --dns-rfc2136-propagation-seconds 30 \
                 --preferred-challenges=dns-01 \
                 --server "${acme_server}" \
                 --eab-kid "${acme_kid}" \
                 --eab-hmac-key "${acme_hmac_key}" \
                 --email "${acme_email}" \
-                --cert-name $1
+                --cert-name "$1"
 
         # si se ha solicitado, copiamos los certificados 
         # al servidor destino
-        [ ${install} -eq 1 ] && install_certificate $1
+        [ ${install} -eq 1 ] && install_certificate "$1"
 
         # si no verboso borramos fichero temporal de configuración ddns
-        [ ${verbose} -eq 0 ] && rm -f ${dns_credentials}
+        [ ${verbose} -eq 0 ] && rm -f "${ddns_credentials}"
 }
 
 # renove all existing certificates
 do_renove_all () {
 	trace "Enter do_renove_all()"
-	for entry in $(ini_list_sections ${sites_info}) ; do
+	for entry in $(ini_list_sections "${sites_info}") ; do
 		[ "$entry" = "default" ] && continue
-		a=$(ini_read ${sites_info} $entry "cert_enabled") 
-		if [ $a -eq 0 ]; then
+		a=$(ini_read "${sites_info}" "$entry" "cert_enabled") 
+		if [ "$a" -eq 0 ]; then
 			log "Certificate '${entry}' is disabled. Skip"
 		else
-			do_renove ${entry}
+			do_renove "$entry"
 		fi
 	done
 }
@@ -368,10 +391,8 @@ usage () {
 	echo "  -R | --revoke <name>    Revoke certificate <name>"
 	echo "  -E | --enable <name>    Mark certificate <name> as active in conf file"
 	echo "  -D | --disable <name>   Mark certificate <name> as inactive in conf file"
-	echo "  -a | --renove-all       Renew all certificates next to expire"
+	echo "  -a | --renove-all       Renew all certificates next to expiration (30 days or less)"
 	echo "  -r | --renove <name>    Force renove certificate <name>"
-	echo "  -e | --expire <days>    Renew after <days> before expiration"
-	echo "                          (def: 30 days)"
 	echo "  -C | --creds <file>     Path to ACME EAB creadentials .ini file"
 	echo "                          (def: '${acme_creds}')"
 	echo "  -u | --user <user>      Use ACME credentials for user <user>"
@@ -462,14 +483,6 @@ while [ "Z$1" != "Z" ]; do
 		[ "$action" != "" ] && (echo "Cannot ask for '${action}' and 'renove-all" >&2; exit 1) 
 		action="renove-all"; shift;
 		;;
-	"Z-e"  | "Z--expire" )
-		shift
-		re='^[0-9]+$'
-		if ! [[ $1 =~ $re ]] ; then
-		   echo "Expire: must enter number of days before expiration" >&2; exit 1
-		fi
-		expire=$1; shift
-		;;
 	"Z-C"  | "Z--creds" )
 		shift;
 		if [ ! -f "$1" ]; then
@@ -502,7 +515,9 @@ if [ ! -f "${ini_parser}" ]; then
 	echo "Ini Parser library file '${ini_parser}' does not exist. Abort" >&2
 	exit 1
 else
-	source ${ini_parser}
+	# shellcheck disable=SC1090
+	# shellcheck source=/dev/null
+	source "${ini_parser}"
 fi
 
 # An action must be requested
@@ -538,7 +553,7 @@ esac
 if [ ${mailto} -eq 1 ]; then
 	fecha=$(/bin/date +%Y%m%d_%H%M)
 	cat "${log_file}" |\
-	  	mail -s "Informe de ejecución de certmanager ${fecha}" cdc_logs@autolistas.upm.es
+	  	mail -s "Informe de ejecución de certmanager ${fecha}" "${mailto}"
 fi
 
 # eso es todo, amigos

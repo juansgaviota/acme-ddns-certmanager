@@ -86,10 +86,8 @@ Usage: ./certmanager.sh options
   -R | --revoke <name>    Revoke certificate <name>
   -E | --enable <name>    Mark certificate <name> as active in sites file
   -D | --disable <name>   Mark certificate <name> as inactive in sites file
-  -a | --renove-all       Renew all certificates next to expire
+  -a | --renove-all       Renew all certificates next to expire (30 days or less)
   -r | --renove <name>    Force renove certificate <name>
-  -e | --expire <days>    Renew when <days> before expiration
-                          (def: 30 days)
   -m | --mail <dest>      Send log via mail to <dest>
   -i | --install          Install certificate to (remote) server
                           (default is do not install)
@@ -266,6 +264,9 @@ El fichero tiene la estructura siguiente:
 # que se aplican a todas las secciones, salvo que sean sobreescritas
 #
 [default]
+# credenciales de acceso acme y ddns
+acme_credentials = "default"
+ddns_credentials = "ddns-key"
 # Ubicacion de cada elemento del certificado en el host destino
 # Si no están definidos, el certificado no se intenta distribuir
 key_path = "/etc/ssl/private/
@@ -276,7 +277,7 @@ chain_path = "/usr/share/ca-certificates/
 # Lista de certificados que se gestionan
 #
 # El nombre de la seccion debe coincidir con el CommonName (CN) del certificado
-[name.dit.upm.es]
+[name.example.com]
 ### flag que indica si esta entrada está o no habilitada (Requerido)
 cert_enabled=1
 #
@@ -285,7 +286,7 @@ cert_enabled=1
 # certbot siempre incluye el CN en esta lista
 # Actualmente NO se permiten wildcards
 cert_alt_names = ""
-### credenciales de acceso al DDNS mediante nsupdate (ddns_keys.ini Requerido)
+### credenciales de acceso al DDNS mediante nsupdate (fichero ddns_keys.ini Requerido)
 ddns_credentials = "key1"
 ### Credenciales de acreditación ACME (fichero acme_creds.ini Requerido)
 acme_credentials = "user1"
@@ -298,8 +299,8 @@ key_path = "/etc/ssl/private/
 cert_path = "/etc/ssl/certs/
 chain_path = "/usr/share/ca-certificates/
 
-[www.lab.dit.upm.es]
-cert_host = "host.domain.upm.es"
+[www.sub.example.com]
+cert_host = "host.sub.example.com"
 cert_alt_names = ""
 cert_enabled = 0
 ```
