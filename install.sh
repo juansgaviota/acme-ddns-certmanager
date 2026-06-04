@@ -58,10 +58,12 @@ mkdir -p /usr/local/lib/certmanager
 mkdir -p /usr/local/bin
 
 echo "Instalando ficheros..."
-# configuracion
+# configuracion. Preservamos ficheros originales si existen
 for i in ${conffiles}; do
     dest=$(basename "$i")
-    install -o root -g root -m 640 "$i" /etc/certmanager/"${dest}"
+    file="/etc/certmanager/${dest}"
+    [ -f "${file}" ] && file="${file}.dist"
+    install -o root -g root -m 640 "$i" "${file}"
 done
 # bibliotecas
 for i in ${libfiles}; do

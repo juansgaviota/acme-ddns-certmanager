@@ -49,7 +49,6 @@ lock_file=${tmp_dir}/certmanager.lock
 # Valores por defecto
 verbose=0	# show log in console
 action=""	# Action to perform when this script is executed
-user="default"  # user section in credentials file to retrieve data from
 mailto=""	# on execution send log to provided mail address
 install=0	# re-distribute new created certificates
 enabled=1	# mark named site entry enabled/disabled
@@ -138,6 +137,7 @@ parse_site () {
     ddns_credentials=$(ini_get_or_default "${sites_info}" "$1" "ddns_credentials" "${ddns_credentials}")
 	# credenciales ACME
 	acme_credentials=$(ini_get_or_default "${sites_info}" "$1" "acme_credentials" "${acme_credentials}")
+	
 	# paths de instalación del certificado en el host destino
 	key_path=$(ini_get_or_default "${sites_info}" "$1" "key_path" "${key_path}")
 	cert_path=$(ini_get_or_default "${sites_info}" "$1" "cert_path" "${cert_path}")
@@ -166,6 +166,8 @@ parse_site () {
 # read and parse ACME EAB credentials .ini file
 # $1: user section in the .ini file to read credentials from
 parse_creds () {
+	trace "enter parse_creds ('$1')"
+	user=$1
     if [ ! -f "$acme_creds" ]; then
 		error "ACME EAB credentials file '$acme_creds' does not exist" >&2
 		exit 1
@@ -272,6 +274,7 @@ do_create () {
 	# parse sites ini file to retrieve certificate and credentials
 	parse_site "$1"
 	parse_creds "${acme_credentials}"
+
 	[ -z "${cert_alt_names}" ] || cert_alt_names="-d ${cert_alt_names}"
 	# extract ddns credentials from ddns_keys file
 	ddns_temp="${tmp_dir}/ddns_credentials.$$.ini"
@@ -281,15 +284,15 @@ do_create () {
 		eab_data="--eab-kid ${acme_kid} --eab-hmac-key ${acme_hmac_key}"
 	fi 
 	certbot certonly \
-		--logs_dir ${log_dir} \
+		--logs-dir ${log_dir} \
 		--dns-rfc2136 \
 		--dns-rfc2136-credentials "${ddns_temp}" \
 		--dns-rfc2136-propagation-seconds 30 \
 		--preferred-challenges=dns-01 \
 		--server "${acme_server}" \
-		"${eab_data}" \
+		  ${eab_data} \
 		--email "${acme_email}" \
-		--cert-name "$1" \
+		-d "$1" \
 		"${cert_alt_names}"
 
 	# si se ha solicitado, copiamos los certificados 
@@ -317,7 +320,7 @@ do_delete () {
 		eab_data="--eab-kid ${acme_kid} --eab-hmac-key ${acme_hmac_key}"
 	fi 
     certbot delete \
-            --logs_dir ${log_dir} \
+            --logs-dir ${log_dir} \
             --dns-rfc2136 \
             --dns-rfc2136-credentials "${ddns_credentials}" \
             --dns-rfc2136-propagation-seconds 30 \
@@ -350,7 +353,7 @@ do_revoke () {
 		eab_data="--eab-kid ${acme_kid} --eab-hmac-key ${acme_hmac_key}"
 	fi 
     certbot revoke \
-            --logs_dir ${log_dir} \
+            --logs-dir ${log_dir} \
             --dns-rfc2136 \
             --dns-rfc2136-credentials "${ddns_credentials}" \
             --dns-rfc2136-propagation-seconds 30 \
@@ -381,7 +384,7 @@ do_renove () {
 		eab_data="--eab-kid ${acme_kid} --eab-hmac-key ${acme_hmac_key}"
 	fi 
     certbot renew \
-            --logs_dir ${log_dir} \
+            --logs-dir ${log_dir} \
             --dns-rfc2136 \
             --dns-rfc2136-credentials "${ddns_credentials}" \
             --dns-rfc2136-propagation-seconds 30 \
@@ -446,16 +449,9 @@ usage () {
 	echo "  -R | --revoke <name>    Revoke certificate <name>"
 	echo "  -E | --enable <name>    Mark certificate <name> as active in conf file"
 	echo "  -D | --disable <name>   Mark certificate <name> as inactive in conf file"
-	echo "  -a | --renove-all       Renew all certificates next to expiration (30 days or less)"
+	echo "  -a | --renove-all       Renew all certs next to expire (30 days or less)"
 	echo "  -r | --renove <name>    Force renove certificate <name>"
-	echo "  -C | --creds <file>     Path to ACME EAB creadentials .ini file"
-	echo "                          (def: '${acme_creds}')"
-	echo "  -u | --user <user>      Use ACME credentials for user <user>"
-	echo "                          (def: '[default]' section of <creds> file)"
-	echo "  -S | --sites <file>     Path to DNS info and install data .ini file"
-	echo "                          (def: '${sites_info}')"
-	echo "                          Every cert_name must have an entry in this file"
-	echo "  -m | --mail             Send log via mail to admin"
+	echo "  -m | --mail <addr>      Send log via mail to addr"
 	echo "  -i | --install          Install/remove certificate into (remote) server"
 	echo "                          (default is do not install )"
 	echo ""
@@ -468,7 +464,7 @@ usage () {
 # Creamos (si no están ya creados) los directorios de logs y temporales
 mkdir -p "${log_dir}" "${tmp_dir}"
 
-# Generamos un fichero de bloqueo para evitar ejecucion simultanea
+# Generamos un fichero de bloqueo para evitar ejecucion simulGtanea
 # de este script
 if ! lockfile -r 0 "${lock_file}" ; then
         echo "Hay un 'certmanager' en ejecucion"
@@ -575,11 +571,11 @@ case "$action" in
 	"revoke" ) do_revoke "${cert_name}" ;;
 	"renove" ) do_renove "${cert_name}" ;;
 	"renove-all" ) do_renove_all ;;
-	"enable" ) do_enable ${enabled} ;;
+	"enable" ) do_enable "${cert_name}" ${enabled};;
 esac
 
 # si se ha definido, mandar correo al CdC
-if [ ${mailto} -eq 1 ]; then
+if [ -n "${mailto}" ]; then
 	fecha=$(/bin/date +%Y%m%d_%H%M)
 	cat "${log_file}" |\
 	  	mail -s "Informe de ejecución de certmanager ${fecha}" "${mailto}"
@@ -587,4 +583,5 @@ fi
 
 # eso es todo, amigos
 echo "Proceso completado"
+rm -f "${lock_file}"
 exit 0

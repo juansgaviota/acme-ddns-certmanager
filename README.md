@@ -269,9 +269,9 @@ acme_credentials = "default"
 ddns_credentials = "ddns-key"
 # Ubicacion de cada elemento del certificado en el host destino
 # Si no están definidos, el certificado no se intenta distribuir
-key_path = "/etc/ssl/private/
-cert_path = "/etc/ssl/certs/
-chain_path = "/usr/share/ca-certificates/
+key_path = "/etc/ssl/private/"
+cert_path = "/etc/ssl/certs/"
+chain_path = "/usr/share/ca-certificates/"
 
 #
 # Lista de certificados que se gestionan
@@ -295,9 +295,9 @@ acme_credentials = "user1"
 # Nombre del host en el que se va a ubicar el certificado. (Requerido)
 cert_host = "host.domain.upm.es"
 # Si no están definidos, el certificado no se intenta distribuir
-key_path = "/etc/ssl/private/
-cert_path = "/etc/ssl/certs/
-chain_path = "/usr/share/ca-certificates/
+key_path = "/etc/ssl/private/"
+cert_path = "/etc/ssl/certs/"
+chain_path = "/usr/share/ca-certificates/"
 
 [www.sub.example.com]
 cert_host = "host.sub.example.com"
@@ -314,7 +314,6 @@ Por ejemplo para procesar semanalmente, y en su caso renovar los certificados pr
 tal que sigue:
 
 > crontab -e
-
 ```
 ...
 0 6 * * 0 /usr/local/bin/certmanager.sh --renove-all --expire 30 --install --mail <certadmin@example.com>
