@@ -75,7 +75,7 @@ done
 for i in ${docfiles}; do
     "${INSTALL}" -o root -g root -m 644 "$i" /usr/share/doc/certmanager/"$i"
 done
-which -s md2html && md2html README.md -o /usr/share/doc/certmanager/README.html
+which -s md2html && md2html -f --github README.md -o /usr/share/doc/certmanager/README.html
 
 echo ""
 echo "Instalacion completada."
