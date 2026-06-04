@@ -19,7 +19,6 @@ SCP="/usr/bin/scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o
 # TARSSH="/usr/bin/ssh -q -x -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o LogLevel=ERROR"
 
 # Directories
-BASE="$(dirname "$0")"
 CONFDIR="/etc/certmanager"
 LIBDIR=/usr/local/lib/certmanager
 DOCDIR=/usr/share/doc/certmanager
@@ -195,6 +194,25 @@ parse_creds_file () {
     fi 
 }
 
+# extract ddns info and store in temporary file
+get_ddns_creds () {
+	if [ ! -f "${ddns_keys}" ]; then
+		error "DNS sites conf file \"${ddns_keys}\" does not exist" >&2
+		exit 1
+    elif ! ini_validate "${ddns_keys}" ; then
+		# comprobamos si el fichero .ini es valido
+		error "DNS sites conf file \"${ddns_keys}\"is not a valid .ini file" >&2
+		exit 1
+    elif ! (ini_list_sections "${ddns_keys}" | grep -q "${ddns_credentials}") ; then
+		error "DNS section \"${ddns_credentials}\" is not declared in \"${ddns_keys}\""
+		exit 1;
+    else
+		# finalmente procesamos los datos de la seccion
+		ini_get_all "${ddns_keys}" "${ddns_credentials}"
+	fi
+	return 0
+}
+
 # install certificate in destination server
 # if server host is not defined in sites .ini file, notice and ignore
 # $1: certificate CN name (section in ini file)
@@ -246,11 +264,14 @@ do_create () {
 	# parse sites ini file to retrieve certificate info
 	parse_site "$1"
 	[ -z "${cert_alt_names}" ] || cert_alt_names="-d ${cert_alt_names}"
+	# extract ddns credentials from ddns_keys file
+	ddns_temp="${tmp_dir}/ddns_credentials.$$.ini"
+	get_ddns_creds > "${ddns_temp}"
 	# call to certbot
 	certbot certonly \
 		--logs_dir ${log_dir} \
 		--dns-rfc2136 \
-		--dns-rfc2136-credentials "${ddns_credentials}" \
+		--dns-rfc2136-credentials "${ddns_temp}" \
 		--dns-rfc2136-propagation-seconds 30 \
 		--preferred-challenges=dns-01 \
 		--server "${acme_server}" \
@@ -264,8 +285,8 @@ do_create () {
 	# al servidor destino
 	[ ${install} -eq 1 ] && install_certificate "$1"
 
-	# si no verboso borramos fichero temporal de configuración ddns
-	[ ${verbose} -eq 0 ] && rm -f "${ddns_credentials}"
+	# borramos fichero temporal de configuración ddns
+	rm -f "${ddns_temp}"
 }
 
 # delete a certificate
@@ -274,6 +295,9 @@ do_delete () {
 	trace "Enter do_delete( '$1' )"
 	# parse sites ini file to retrieve certificate info
 	parse_site "$1"
+	# create temp file with ddns keys
+	ddns_temp="${tmp_dir}/ddns_credentials.$$.ini"
+	get_ddns_creds > "${ddns_temp}"
 	# revoke certificate (not really needed, but...)
         do_revoke "$1"
 	# and call certbot to remove
@@ -289,9 +313,10 @@ do_delete () {
                 --email "${acme_email}" \
                 --cert-name "$1"
 	
-	# si install está activado, borramos el certificado en el host
+	# Si install está activado, borramos el certificado en el host
 	[ ${install} -eq 1 ] && remove_certificate "$1"
-
+	# Eliminamos fichero temporal de claves ddns
+	rm -f "${ddns_temp}"
 	# finalmente elimina la seccion asociada del fichero de configuración de sites
 	ini_remove_section "${sites_info}" "$1"
 }
@@ -302,6 +327,9 @@ do_revoke () {
 	trace "Enter do_revoke( '$1' )"
 	# parse sites ini file to retrieve certificate info
 	parse_site "$1"
+	# create temp file with ddns keys
+	ddns_temp="${tmp_dir}/ddns_credentials.$$.ini"
+	get_ddns_creds > "${ddns_temp}"
 	# and call certbot to remove
         certbot revoke \
                 --logs_dir ${log_dir} \
@@ -317,6 +345,8 @@ do_revoke () {
 
 	# disable entry from sites file
 	ini_write "${sites_info}" "$1" "cert_enabled" 0
+	# Eliminamos fichero temporal de claves ddns
+	rm -f "${ddns_temp}"
 }
 
 # Force certificate renewal
@@ -325,7 +355,9 @@ do_renove () {
 	trace "Enter do_renove( \"$1\" )"
         # parse sites ini file to retrieve certificate info
         parse_site "$1"
-
+		# create temp file with ddns keys
+		ddns_temp="${tmp_dir}/ddns_credentials.$$.ini"
+		get_ddns_creds > "${ddns_temp}"
         # call to certbot
         certbot renew \
                 --logs_dir ${log_dir} \
@@ -345,6 +377,8 @@ do_renove () {
 
         # si no verboso borramos fichero temporal de configuración ddns
         [ ${verbose} -eq 0 ] && rm -f "${ddns_credentials}"
+		# Eliminamos fichero temporal de claves ddns
+		rm -f "${ddns_temp}"
 }
 
 # renove all existing certificates
@@ -375,10 +409,11 @@ do_enable () {
 
 # show usage and options
 usage () {
-	echo "HARICA/Certbot cert management via ACME API with DNS-01 validation"
+	echo "Certificate management with certbot/DNS-01 validation"
 	echo "Version: $Version"
 	echo "Author: $Author"
 	echo "License: $License"
+	echo "Available docs: ${DOCDIR}"
 	echo ""
 	echo "Usage: $0 options"
 	echo "  Options:"
@@ -401,7 +436,7 @@ usage () {
 	echo "                          (def: '${sites_info}')"
 	echo "                          Every cert_name must have an entry in this file"
 	echo "  -m | --mail             Send log via mail to admin"
-	echo "  -i | --install          Install certificate to (remote) server"
+	echo "  -i | --install          Install/remove certificate into (remote) server"
 	echo "                          (default is do not install )"
 	echo ""
 }

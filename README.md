@@ -25,7 +25,7 @@ Se pueden manejar certificados de múltiples hosts, múltiples servidores DNS, a
 - etc/ddns_keys.ini
     Fichero de configuración de acceso por DDNS a los diferentes servidores
     de DNS
-- etc/cert_list.ini
+- etc/sites.ini
     Fichero de declaración de diversos certificados a gestionar por la aplicación
 
 ## Instalación
@@ -33,7 +33,7 @@ Se pueden manejar certificados de múltiples hosts, múltiples servidores DNS, a
 
 ### Requisitos previos
 
-CertManager requiere de *certbot* >= 4.4 para su ejecución, así como del plugin *python3-certbot-dns-rfc2136*
+CertManager requiere de *certbot* >= 4.0 para su ejecución, así como del plugin *python3-certbot-dns-rfc2136*
 
 En sistemas Debian 12 o superior, los paquetes vienen incluídos en la distribución base:
 > sudo apt install -y certbot python3-certbot-dns-rfc2136
