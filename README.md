@@ -10,6 +10,8 @@ Asímismo se controla la copia y distribución de los certificados obtenidos a c
 
 Se pueden manejar certificados de múltiples hosts, múltiples servidores DNS, así como declarar las claves de acceso al ddns-update de cada servidor dns y las credenciales ACME que utilizará cada certificado
 
+Las operaciones se realizan consultando un ficheros de configuración de certificados (**sites.ini**), que a su vez utiliza analiza las configuraciones de gestión del DNS y credenciales ACME
+
 ## Estructura
 - certmanager.sh
     Script de gestión
