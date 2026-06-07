@@ -232,6 +232,7 @@ install_certificate () {
 	# parse site. on error notify and return
 	if ! parse_site "$1"; then
 		log "Install certificate into remote host disabled or not posible"
+		# PENDING: try to send cert via email to cert owner
 		return
 	fi
 	fromdir="/etc/letsencrypt/live/${1}/"
@@ -534,7 +535,7 @@ while [ "Z$1" != "Z" ]; do
 		quiet=""
 		shift
 		;;
-	"Z-q" | "Z--quiet" ) # default option, not really needed
+	"Z-q" | "Z--quiet" )
 		verbose="" ;
 		quiet="--quiet"
 		shift
