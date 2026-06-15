@@ -301,6 +301,9 @@ do_create () {
 	# On LetsEncrypt remove eab-xxx related vars
 	[ -n "${eab-kid}" ]	&& eab_data="--eab-kid ${acme_kid} --eab-hmac-key ${acme_hmac_key}"
 
+	# on verbose mode, show certbot commands
+	[ "$verbose" -eq 1 ] && set -x
+
 	# call to certbot
 	certbot certonly \
 		  ${quiet} \
@@ -316,9 +319,11 @@ do_create () {
 		  ${domains} \
 		--email "${acme_email}"
 
+	[ "$verbose" -eq 0 ] && set +x
+
 	# si se ha solicitado, copiamos los certificados 
 	# al servidor destino
-	[ ${install} -eq 1 ] && install_certificate "$1"
+	[ "${install}" -eq 1 ] && install_certificate "$1"
 
 	# borramos fichero temporal de configuración ddns
 	rm -f "${ddns_temp}"
@@ -347,6 +352,9 @@ do_delete () {
 	# On LetsEncrypt remove eab-xxx related vars
 	[ -n "${eab-kid}" ] && eab_data="--eab-kid ${acme_kid} --eab-hmac-key ${acme_hmac_key}"
 
+	# on verbose mode, show certbot commands
+	[ "$verbose" -eq 1 ] && set -x
+
 	# and call certbot to remove. 
     certbot delete \
 		  ${quiet} \
@@ -359,9 +367,11 @@ do_delete () {
 		  ${eab_data} \
         --email "${acme_email}" \
         --cert-name "$1"
-	
+
+	[ "$verbose" -eq 0 ] && set +x
+
 	# Si install está activado, borramos el certificado en el host
-	[ ${install} -eq 1 ] && remove_certificate "$1"
+	[ "${install}" -eq 1 ] && remove_certificate "$1"
 
 	# Eliminamos fichero temporal de claves ddns
 	rm -f "${ddns_temp}"
@@ -392,7 +402,10 @@ do_revoke () {
 
 	# On LetsEncrypt remove eab-xxx related vars
 	[ -n "${eab-kid}" ] && eab_data="--eab-kid ${acme_kid} --eab-hmac-key ${acme_hmac_key}"
-	
+
+	# on verbose mode, show certbot commands
+	[ "$verbose" -eq 1 ] && set -x
+
 	# call to certbot
     certbot revoke \
 		  ${quiet} \
@@ -405,6 +418,8 @@ do_revoke () {
 		  ${eab_data} \
         --email "${acme_email}" \
         --cert-name "$1"
+
+	[ "$verbose" -eq 0 ] && set +x
 
 	# Eliminamos fichero temporal de claves ddns
 	rm -f "${ddns_temp}"
@@ -437,6 +452,9 @@ do_renove () {
     # call to certbot. On letsencrypt remove eab- related variables
 	[ -n "${eab-kid}" ] && eab_data="--eab-kid ${acme_kid} --eab-hmac-key ${acme_hmac_key}"
 
+	# on verbose mode, show certbot commands
+	[ "$verbose" -eq 1 ] && set -x
+
     certbot renew \
 		  ${quiet} \
 		--force-renewal \
@@ -451,9 +469,11 @@ do_renove () {
 		  ${domains} \
         --email "${acme_email}"
 
+	[ "$verbose" -eq 0 ] && set +x
+	
     # si se ha solicitado, copiamos los certificados 
     # al servidor destino
-    [ ${install} -eq 1 ] && install_certificate "$1"
+    [ "${install}" -eq 1 ] && install_certificate "$1"
 
 	# Eliminamos fichero temporal de claves ddns
 	rm -f "${ddns_temp}"
