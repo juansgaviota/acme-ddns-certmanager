@@ -426,6 +426,10 @@ do_renove () {
 	fi 
 	parse_creds "${acme_credentials}"
 	
+	# indicamos el CN y los SubjectAlternateNames
+	domains="-d $1 "
+	[ -n "${cert_alt_names}" ] && domains="-d ${1} -d ${cert_alt_names/,/ -d /}"
+
 	# create temp file with ddns keys. Set proper perms
 	ddns_temp="${tmp_dir}/ddns_renove.$$.ini"
 	get_ddns_creds > "${ddns_temp}" && chmod 640 "${ddns_temp}"
@@ -443,8 +447,9 @@ do_renove () {
         --preferred-challenges=dns-01 \
         --server "${acme_server}" \
 		  ${eab_data} \
-        --email "${acme_email}" \
-        --cert-name "$1"
+        --cert-name "$1" \
+		  ${domains} \
+        --email "${acme_email}"
 
     # si se ha solicitado, copiamos los certificados 
     # al servidor destino
