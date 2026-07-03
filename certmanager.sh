@@ -302,7 +302,7 @@ do_create () {
 	[ -n "${eab-kid}" ]	&& eab_data="--eab-kid ${acme_kid} --eab-hmac-key ${acme_hmac_key}"
 
 	# on verbose mode, show certbot commands
-	[ "$verbose" -eq 1 ] && set -x
+	[ -n "${verbose}"  ] && set -x
 
 	# call to certbot
 	certbot certonly \
@@ -319,7 +319,7 @@ do_create () {
 		  ${domains} \
 		--email "${acme_email}"
 
-	[ "$verbose" -eq 0 ] && set +x
+	[ -z "${verbose}" ] && set +x
 
 	# si se ha solicitado, copiamos los certificados 
 	# al servidor destino
@@ -353,7 +353,7 @@ do_delete () {
 	[ -n "${eab-kid}" ] && eab_data="--eab-kid ${acme_kid} --eab-hmac-key ${acme_hmac_key}"
 
 	# on verbose mode, show certbot commands
-	[ "$verbose" -eq 1 ] && set -x
+	[ -n "${verbose}"  ] && set -x
 
 	# and call certbot to remove. 
     certbot delete \
@@ -368,7 +368,7 @@ do_delete () {
         --email "${acme_email}" \
         --cert-name "$1"
 
-	[ "$verbose" -eq 0 ] && set +x
+	[ -z "${verbose}" ] && set +x
 
 	# Si install está activado, borramos el certificado en el host
 	[ "${install}" -eq 1 ] && remove_certificate "$1"
@@ -404,7 +404,7 @@ do_revoke () {
 	[ -n "${eab-kid}" ] && eab_data="--eab-kid ${acme_kid} --eab-hmac-key ${acme_hmac_key}"
 
 	# on verbose mode, show certbot commands
-	[ "$verbose" -eq 1 ] && set -x
+	[ -n "${verbose}"  ] && set -x
 
 	# call to certbot
     certbot revoke \
@@ -419,7 +419,7 @@ do_revoke () {
         --email "${acme_email}" \
         --cert-name "$1"
 
-	[ "$verbose" -eq 0 ] && set +x
+	[ -z "${verbose}" ] && set +x
 
 	# Eliminamos fichero temporal de claves ddns
 	rm -f "${ddns_temp}"
@@ -453,7 +453,7 @@ do_renove () {
 	[ -n "${eab-kid}" ] && eab_data="--eab-kid ${acme_kid} --eab-hmac-key ${acme_hmac_key}"
 
 	# on verbose mode, show certbot commands
-	[ "$verbose" -eq 1 ] && set -x
+	[ -n "${verbose}"  ] && set -x
 
     certbot renew \
 		  ${quiet} \
@@ -469,7 +469,7 @@ do_renove () {
 		  ${domains} \
         --email "${acme_email}"
 
-	[ "$verbose" -eq 0 ] && set +x
+	[ -z "${verbose}" ] && set +x
 	
     # si se ha solicitado, copiamos los certificados 
     # al servidor destino
