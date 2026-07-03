@@ -319,7 +319,7 @@ do_create () {
 		  ${domains} \
 		--email "${acme_email}"
 
-	[ -z "${verbose}" ] && set +x
+	set +x
 
 	# si se ha solicitado, copiamos los certificados 
 	# al servidor destino
@@ -368,7 +368,7 @@ do_delete () {
         --email "${acme_email}" \
         --cert-name "$1"
 
-	[ -z "${verbose}" ] && set +x
+	set +x
 
 	# Si install está activado, borramos el certificado en el host
 	[ "${install}" -eq 1 ] && remove_certificate "$1"
@@ -404,7 +404,7 @@ do_revoke () {
 	[ -n "${eab-kid}" ] && eab_data="--eab-kid ${acme_kid} --eab-hmac-key ${acme_hmac_key}"
 
 	# on verbose mode, show certbot commands
-	[ -n "${verbose}"  ] && set -x
+	set -x
 
 	# call to certbot
     certbot revoke \
@@ -419,7 +419,7 @@ do_revoke () {
         --email "${acme_email}" \
         --cert-name "$1"
 
-	[ -z "${verbose}" ] && set +x
+	set +x
 
 	# Eliminamos fichero temporal de claves ddns
 	rm -f "${ddns_temp}"
@@ -469,7 +469,7 @@ do_renove () {
 		  ${domains} \
         --email "${acme_email}"
 
-	[ -z "${verbose}" ] && set +x
+	set +x
 	
     # si se ha solicitado, copiamos los certificados 
     # al servidor destino
