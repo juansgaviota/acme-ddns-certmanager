@@ -429,6 +429,8 @@ do_revoke () {
 }
 
 # Force certificate renewal
+# 20260707: la operacion "renew" no acepta dominio ni alternate names,
+#           solamente el nombre (CN) del certificado a renovar
 # $1 name of certificate to be renoved
 do_renove () {
 	trace "Enter do_renove( \"$1\" )"
@@ -440,10 +442,6 @@ do_renove () {
 		return
 	fi 
 	parse_creds "${acme_credentials}"
-	
-	# indicamos el CN y los SubjectAlternateNames
-	domains="-d $1 "
-	[ -n "${cert_alt_names}" ] && domains="-d ${1} -d ${cert_alt_names/,/ -d /}"
 
 	# create temp file with ddns keys. Set proper perms
 	ddns_temp="${tmp_dir}/ddns_renove.$$.ini"
@@ -466,7 +464,6 @@ do_renove () {
         --server "${acme_server}" \
 		  ${eab_data} \
         --cert-name "$1" \
-		  ${domains} \
         --email "${acme_email}"
 
 	set +x
