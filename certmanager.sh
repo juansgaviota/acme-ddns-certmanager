@@ -5,7 +5,7 @@
 # 
 #
 Author="Juan Antonio Martínez <juanantonio.martinez@upm.es>"
-Version="1.0 2026-05-27"
+Version="1.1 2026-07-08"
 License="MIT (https://opensource.org/license/mit)"
 #
 # Notice:
@@ -49,6 +49,7 @@ lock_file=${tmp_dir}/certmanager.lock
 # Valores por defecto
 verbose=""		# show log in console
 quiet="--quiet" # suppress certbot output to console
+force=""		# force certbot to renew/create even if not expired
 action=""	# Action to perform when this script is executed
 mailto=""	# on execution send log to provided mail address
 install=0	# re-distribute new created certificates
@@ -317,6 +318,7 @@ do_create () {
 		  ${eab_data} \
 		--cert-name "$1" \
 		  ${domains} \
+		  ${force} \
 		--email "${acme_email}"
 
 	set +x
@@ -516,6 +518,7 @@ usage () {
 	echo "  -? | -h | --help        show usage and exit"
 	echo "  -v | --verbose          Send certmanager/certbot logs to console (def: don't)"
 	echo "  -l | --list             List current certificates"
+	echo "  -f | --force            Force certbot to renew/create even if not expired"
 	echo "  -c | --create <name>    Create/renove certificate <name>"
 	echo "  -d | --delete <name>    Delete certificate <name>"
 	echo "  -R | --revoke <name>    Revoke certificate <name>"
@@ -567,6 +570,9 @@ while [ "Z$1" != "Z" ]; do
 		;;
 	"Z-m" | "Z--mail" ) 
 		shift; mailto=1 ; shift 
+		;;
+	"Z-f" | "Z--force" ) 
+		force="--force-renuewal" ;	shift
 		;;
 	"Z-E" | "Z--enable" ) 
 		action="enable"; enabled=1 ; 

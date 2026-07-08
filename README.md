@@ -87,6 +87,7 @@ Usage: ./certmanager.sh options
   -v | --verbose          Verbose log to console
   -q | --quiet            Do not send output to console (but errors)
   -l | --list             List current certificates
+  -f | --force            Force re-create if cert already exists
   -c | --create <name>    Create/renove certificate <name>
   -d | --delete <name>    Delete certificate <name>
   -R | --revoke <name>    Revoke certificate <name>
@@ -113,6 +114,10 @@ Usage: ./certmanager.sh options
     Muestra la lista de certificados registrados en el fichero sites.ini, así como
     su estado habilitado/deshabilitado
     Si se incluye la opción **--verbose** muestra además la información del certificado (si está habilitado)
+
+***-f --force***
+    Si el certificado existe y no está próximo a caducar, indica a la opción --create que
+    debe forzar su re-creación. Esta opción es necesaria en el caso en que queramos cambiar las credenciales del usuario que ha creado el certificado
 
 ***-c --create <nombre>***  
     Crea el certificado con el nombre indicado. Dicho nombre debe corresponder a una sección del fichero **sites.ini**  
