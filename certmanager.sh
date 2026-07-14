@@ -237,9 +237,12 @@ install_certificate () {
 		return
 	fi
 	fromdir="/etc/letsencrypt/live/${1}/"
-	${SCP} "${fromdir}/cert.pem" "${cert_host}":"${cert_path}/${1}_cert.pem"	
-	${SCP} "${fromdir}/privkey.pem" "${cert_host}":"${key_path}/${1}_key.pem"
-	${SCP} "${fromdir}/fullchain.pem" "${cert_host}":"${chain_path}/${1}_chain.pem"
+	[ -n "${cert_path}" ] && \
+		${SCP} "${fromdir}/cert.pem" "${cert_host}":"${cert_path}/${1}_cert.pem"
+	[ -n "${key_path}" ] && \
+		${SCP} "${fromdir}/privkey.pem" "${cert_host}":"${key_path}/${1}_key.pem"
+	[ -n "${chain_path}" ] && \
+		${SCP} "${fromdir}/fullchain.pem" "${cert_host}":"${chain_path}/${1}_chain.pem"
 	${SSH} "${cert_host}" update-ca-certificates
 }
 
