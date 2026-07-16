@@ -8,10 +8,6 @@ Author="Juan Antonio Martínez <juanantonio.martinez@upm.es>"
 Version="1.1 2026-07-08"
 License="MIT (https://opensource.org/license/mit)"
 
-# prevent execution of this script if any command fails, 
-# if any variable is unset, or if any command in a pipeline fails
-set -euo pipefail
-
 #
 # Notice:
 # File lib_ini.sh is Copyright (c) 2023, Leandro Ferreira
@@ -277,7 +273,7 @@ do_list () {
 	for entry in $(ini_list_sections "${sites_info}") ; do
 		[ "$entry" = "default" ] && continue
 		a=$(ini_read "${sites_info}" "$entry" "cert_enabled") 
-		[[ $a -eq 0 ]] && echo "${entry} -> disabled" || echo "${entry} -> enabled"
+		[[ $a -eq 0 ]] && echo -e "\n${entry} -> disabled" || echo -e "\n${entry} -> enabled"
 		# en modo verboso presentamos info de los certificados enabled
 		if [ -n "${verbose}" ]; then
 			[ "$a" -eq 0 ] && continue
@@ -560,8 +556,8 @@ trap 'rm -f ${lock_file}' EXIT
 
 # 
 # analizamos argumentos de la linea de comandos
-while [ "Z$1" != "Z" ]; do
-    case "Z$1" in
+while [ "Z${1}" != "Z" ]; do
+    case "Z${1}" in
 	"Z-?" | "Z-h" | "Z--help" ) 
 		usage; die 0 
 		;;
@@ -627,6 +623,10 @@ while [ "Z$1" != "Z" ]; do
     esac
 done
 
+# prevent execution of this script if any command fails, 
+# or if any command in a pipeline fails
+set -euo pipefail
+
 # Verificamos que sea el usuario "root" quien ejecuta el programa
 if [ $UID -ne 0 ]; then
        die 1 "Debe ejecutar este script como root" 
@@ -646,6 +646,7 @@ done
 if [ ! -f "${ini_parser}" ]; then
 	die 1 "Ini Parser library file '${ini_parser}' does not exist. Abort"
 else
+	ZSH_VERSION=${ZSH_VERSION:-""}  # avoid zsh warning about source
 	# shellcheck disable=SC1090
 	# shellcheck source=/dev/null
 	source "${ini_parser}"
