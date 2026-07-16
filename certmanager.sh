@@ -653,6 +653,9 @@ else
 	source "${ini_parser}"
 fi
 
+# rewrite trap to call die() on exit, and remove lockfile
+trap '_ini_cleanup_temp_files; _ini_cleanup_locks; die 0' EXIT
+
 # An action must be requested
 if [ "Z${action}" = "Z" ]; then
 	die 1 "No action requested. Use '$0 --help' to see options" 
