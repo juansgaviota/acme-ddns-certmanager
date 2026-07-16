@@ -7,6 +7,11 @@
 Author="Juan Antonio Martínez <juanantonio.martinez@upm.es>"
 Version="1.1 2026-07-08"
 License="MIT (https://opensource.org/license/mit)"
+
+# prevent execution of this script if any command fails, 
+# if any variable is unset, or if any command in a pipeline fails
+set -euo pipefail
+
 #
 # Notice:
 # File lib_ini.sh is Copyright (c) 2023, Leandro Ferreira
@@ -44,7 +49,7 @@ log_dir="${LOGDIR}"
 # fichero de logs
 log_file="${log_dir}/cert_manager.$$.log"
 # fichero de bloqueo
-lock_file=${tmp_dir}/certmanager.lock
+lock_file="${tmp_dir}/certmanager.lock"
 
 # Valores por defecto
 verbose=""		# show log in console
@@ -189,7 +194,7 @@ parse_creds () {
     elif ! ini_validate "$acme_creds" ; then
 		# comprobamos si el fichero .ini es valido
 		die 1 "ACME EAB credentials '$acme_creds' is not a valid .ini file" 
-    elif ! (ini_list_sections "$acme_creds" | grep -q "$user") ; then
+    elif ! (ini_list_sections "$acme_creds" | grep -Fq -- "${user}") ; then
 		die 1 "User '$user' is not declared in '$acme_creds'"
     else
 		echo "User: $user"
@@ -216,7 +221,7 @@ get_ddns_creds () {
     elif ! ini_validate "${ddns_keys}" ; then
 		# comprobamos si el fichero .ini es valido
 		die 1 "DNS sites conf file \"${ddns_keys}\"is not a valid .ini file" 
-    elif ! (ini_list_sections "${ddns_keys}" | grep -q "${ddns_credentials}") ; then
+    elif ! (ini_list_sections "${ddns_keys}" | grep -Fq -- "${ddns_credentials}") ; then
 		die 1 "DNS section \"${ddns_credentials}\" is not declared in \"${ddns_keys}\""
     else
 		# finalmente procesamos los datos de la seccion
@@ -274,9 +279,9 @@ do_list () {
 		a=$(ini_read "${sites_info}" "$entry" "cert_enabled") 
 		[[ $a -eq 0 ]] && echo "${entry} -> disabled" || echo "${entry} -> enabled"
 		# en modo verboso presentamos info de los certificados enabled
-		if [ -z "${verbose}" ]; then
+		if [ -n "${verbose}" ]; then
 			[ "$a" -eq 0 ] && continue
-			certbot certificates 
+			certbot certificates --cert-name "${entry}" 2>/dev/null
 		fi
 	done
 }
@@ -541,6 +546,8 @@ usage () {
 
 # Creamos (si no están ya creados) los directorios de logs y temporales
 mkdir -p "${log_dir}" "${tmp_dir}"
+chown root:root "${log_dir}" "${tmp_dir}"
+chmod 750 "${log_dir}" "${tmp_dir}"
 
 # Generamos un fichero de bloqueo para evitar ejecucion simulGtanea
 # de este script
@@ -624,6 +631,16 @@ done
 if [ $UID -ne 0 ]; then
        die 1 "Debe ejecutar este script como root" 
 fi
+
+# check owner and permissions of conf files. on error, abort
+for i in "${acme_creds}" "${ddns_keys}" "${sites_info}"; do
+	if [ ! -f "$i" ]; then
+		die 1 "File '$i' does not exist"
+	fi
+	if ! stat -c "%A %u %g" "$i" | grep -Fq -- '-rw-r----- 0 0'; then
+		die 1 "File '$i' is not owned by root or has wrong permissions. Must be '-rw-r----- 1 root root'"
+	fi
+done
 
 # check and load .ini file parser library
 if [ ! -f "${ini_parser}" ]; then

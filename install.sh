@@ -25,10 +25,11 @@ install () {
 if [ "Z$1" = "Z-u" ]; then
     # pregunta al usuario antes de proceder a la DES-instalacion
     read -r -p "Pulse Return para desinstalar CertManager o Ctrl-c para cancelar"
-    rm -rf /etc/certmanager
-    rm -rf /usr/local/lib/certmanager
-    rm -rf /usr/share/doc/certmanager
-    rm -rf /usr/local/bin/{certmanager.sh,tsig2ini.sh}
+    # JAMC 20260716 replace rm -rf to native rm and rmdir to avoid accidental deletion of other files
+    [ -d /etc/certmanager ] && rm -rf -- /etc/certmanager
+    [ -d /usr/local/lib/certmanager ] && rm -rf -- /usr/local/lib/certmanager
+    [ -d /usr/share/doc/certmanager ] && rm -rf -- /usr/share/doc/certmanager
+    rm -f /usr/local/bin/{certmanager,tsig2ini}.sh
     echo "CertManager desinstalado"
     exit 0
 fi
