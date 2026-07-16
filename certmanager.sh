@@ -104,7 +104,7 @@ die () {
 	# si error o verbose no borramos fichero de logs
 	if [ -n "${verbose}" ] || [ "${exitcode}" -eq 0 ] ; then  rm -f "${log_file}"; fi
 	# limpiamos fichero de lock.
-	rm -f "${lock_file}"
+	rm -rf "${lock_file} ${tmp_dir}"
 	exit "${exitcode}"
 }
 
@@ -273,7 +273,9 @@ do_list () {
 	for entry in $(ini_list_sections "${sites_info}") ; do
 		[ "$entry" = "default" ] && continue
 		a=$(ini_read "${sites_info}" "$entry" "cert_enabled") 
-		[[ $a -eq 0 ]] && echo -e "\n${entry} -> disabled" || echo -e "\n${entry} -> enabled"
+		ena="enabled"
+		[ "$a" -eq 0 ] && ena="disabled"
+		echo -e "\nCertificate '${entry}' is ${ena}"
 		# en modo verboso presentamos info de los certificados enabled
 		if [ -n "${verbose}" ]; then
 			[ "$a" -eq 0 ] && continue
@@ -549,10 +551,9 @@ chmod 750 "${log_dir}" "${tmp_dir}"
 # de este script
 if ! lockfile -r 0 "${lock_file}" ; then
         error "Hay un 'certmanager' en ejecucion"
-        die 1 "Si lo anterior no es correcto, borre el fichero '${lock_file}' y pruebe de nuevo"
+        error "Si lo anterior no es correcto, borre el fichero '${lock_file}' y pruebe de nuevo"
+		exit 1
 fi
-# Borramos el fichero de bloqueo al finalizar la ejecucion del programa
-trap 'rm -f ${lock_file}' EXIT
 
 # 
 # analizamos argumentos de la linea de comandos
@@ -684,5 +685,4 @@ fi
 
 # eso es todo, amigos
 log "Proceso completado"
-rm -f "${lock_file}"
-exit 0
+die 0
