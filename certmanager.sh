@@ -330,7 +330,7 @@ do_create () {
 		--logs-dir ${log_dir} \
 		--dns-rfc2136 \
 		--dns-rfc2136-credentials "${ddns_temp}" \
-		--dns-rfc2136-propagation-seconds 30 \
+		--dns-rfc2136-propagation-seconds 45 \
 		--preferred-challenges=dns-01 \
 		--server "${acme_server}" \
 		  ${eab_data} \
@@ -378,7 +378,7 @@ do_delete () {
         --logs-dir ${log_dir} \
         --dns-rfc2136 \
         --dns-rfc2136-credentials "${ddns_temp}" \
-        --dns-rfc2136-propagation-seconds 30 \
+        --dns-rfc2136-propagation-seconds 45 \
         --preferred-challenges=dns-01 \
         --server "${acme_server}" \
 		  ${eab_data} \
@@ -426,7 +426,7 @@ do_revoke () {
         --logs-dir ${log_dir} \
         --dns-rfc2136 \
         --dns-rfc2136-credentials "${ddns_temp}" \
-        --dns-rfc2136-propagation-seconds 30 \
+        --dns-rfc2136-propagation-seconds 45 \
         --preferred-challenges=dns-01 \
         --server "${acme_server}" \
 		  ${eab_data} \
@@ -470,7 +470,7 @@ do_renove () {
         --logs-dir ${log_dir} \
         --dns-rfc2136 \
         --dns-rfc2136-credentials "${ddns_temp}" \
-        --dns-rfc2136-propagation-seconds 30 \
+        --dns-rfc2136-propagation-seconds 45 \
         --preferred-challenges=dns-01 \
         --server "${acme_server}" \
 		  ${eab_data} \

@@ -54,7 +54,7 @@ read -r -p "Pulse Return para comenzar la instalación o Ctrl-c para cancelar"
 # Creamos carpetas asociadas
 echo "Creando directorios..."
 mkdir -p /etc/certmanager/ddns
-chmod -R 750 /etc/certmanager
+chmod 750 /etc/certmanager
 mkdir -p /usr/share/doc/certmanager
 mkdir -p /usr/local/lib/certmanager
 mkdir -p /usr/local/bin
