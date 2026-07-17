@@ -25,6 +25,7 @@ LIBDIR=/usr/local/lib/certmanager
 DOCDIR=/usr/share/doc/certmanager
 TMPDIR=/tmp/certmanager
 LOGDIR=/var/log/certmanager
+LOCKDIR=/var/lock
 
 # Ini parser library script
 # https://github.com/lsferreira42/bash-ini-parser
@@ -53,7 +54,7 @@ log_dir="${LOGDIR}"
 # fichero de logs
 log_file="${log_dir}/cert_manager.$$.log"
 # fichero de bloqueo
-lock_file="${tmp_dir}/certmanager.lock"
+lock_file="${LOCKDIR}/certmanager.lock"
 
 # Valores por defecto
 verbose=""		# show log in console
