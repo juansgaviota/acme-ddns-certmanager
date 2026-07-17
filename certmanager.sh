@@ -39,8 +39,16 @@ sites_info="${CONFDIR}/sites.ini"
 # Fichero .ini que contiene las claves de acceso al servidor DNS para la validación ACME
 ddns_keys="${CONFDIR}/ddns_keys.ini"
 
+# Carpeta donde se regeneran las claves temporales para la validación ACME
+# certbot guarda en su configuración estos datos a la hora 
+# de proceder a la renovación de certificados, por lo que una
+# vez generado el fichero no se debe borrar
+ddns_dir="${CONFDIR}/ddns"
+
 # directorio de ficheros temporales
 tmp_dir="${TMPDIR}"
+# registro de eventos y errores del script.
+# Se borra al finalizar la ejecución salvo --verbose o error
 log_dir="${LOGDIR}"
 # fichero de logs
 log_file="${log_dir}/cert_manager.$$.log"
@@ -102,7 +110,9 @@ die () {
 	# en caso de error, lo guardamos en el fichero de logs
 	[ "${exitcode}" -ne 0 ] && error "$*"
 	# si error o verbose no borramos fichero de logs
-	if [ -n "${verbose}" ] || [ "${exitcode}" -eq 0 ] ; then  rm -f "${log_file}"; fi
+	if [ -n "${verbose}" ] || [ "${exitcode}" -eq 0 ] ; then  
+		rm -f "${log_file}"; 
+	fi
 	# limpiamos fichero de lock.
 	rm -rf "${lock_file} ${tmp_dir}"
 	exit "${exitcode}"
@@ -190,7 +200,7 @@ parse_creds () {
     elif ! ini_validate "$acme_creds" ; then
 		# comprobamos si el fichero .ini es valido
 		die 1 "ACME EAB credentials '$acme_creds' is not a valid .ini file" 
-    elif ! (ini_list_sections "$acme_creds" | grep -Fq -- "${user}") ; then
+    elif ! (ini_list_sections "$acme_creds" | grep -q -- "${user}") ; then
 		die 1 "User '$user' is not declared in '$acme_creds'"
     else
 		echo "User: $user"
@@ -217,7 +227,7 @@ get_ddns_creds () {
     elif ! ini_validate "${ddns_keys}" ; then
 		# comprobamos si el fichero .ini es valido
 		die 1 "DNS sites conf file \"${ddns_keys}\"is not a valid .ini file" 
-    elif ! (ini_list_sections "${ddns_keys}" | grep -Fq -- "${ddns_credentials}") ; then
+    elif ! (ini_list_sections "${ddns_keys}" | grep -q "${ddns_credentials}") ; then
 		die 1 "DNS section \"${ddns_credentials}\" is not declared in \"${ddns_keys}\""
     else
 		# finalmente procesamos los datos de la seccion
@@ -302,7 +312,9 @@ do_create () {
 	[ -n "${cert_alt_names}" ] && domains="-d ${1} -d ${cert_alt_names/,/ -d /}"
 	
 	# extract ddns credentials from ddns_keys file. Notice perms
-	ddns_temp="${tmp_dir}/ddns_create.$$.ini"
+	# we regenerate this file to take care on credentials files change
+	# certbot will save this file in its configuration for renewall
+	ddns_temp="${ddns_dir}/${ddns_credentials}.ini"
 	get_ddns_creds > "${ddns_temp}" && chmod 640 "${ddns_temp}"
 
 	# On LetsEncrypt remove eab-xxx related vars
@@ -332,9 +344,6 @@ do_create () {
 	# si se ha solicitado, copiamos los certificados 
 	# al servidor destino
 	[ "${install}" -eq 1 ] && install_certificate "$1"
-
-	# borramos fichero temporal de configuración ddns
-	rm -f "${ddns_temp}"
 }
 
 # delete a certificate
@@ -351,7 +360,7 @@ do_delete () {
 	parse_creds "${acme_credentials}"
 
 	# create temp file with ddns keys. Notice permissions
-	ddns_temp="${tmp_dir}/ddns_delete.$$.ini"
+	ddns_temp="${ddns_dir}/${ddns_credentials}.ini"
 	get_ddns_creds > "${ddns_temp}" && chmod 640 "${ddns_temp}"
 
 	# Revoke certificate (not really needed, but...)
@@ -381,9 +390,6 @@ do_delete () {
 	# Si install está activado, borramos el certificado en el host
 	[ "${install}" -eq 1 ] && remove_certificate "$1"
 
-	# Eliminamos fichero temporal de claves ddns
-	rm -f "${ddns_temp}"
-
 	# finalmente elimina la seccion asociada del fichero de configuración de sites
 	# o mejor: marcamos la seccion como disable (por si acaso)
 	# ini_remove_section "${sites_info}" "$1"
@@ -405,7 +411,7 @@ do_revoke () {
 	parse_creds "${acme_credentials}"
 	
 	# create temp file with ddns keys with proper perms
-	ddns_temp="${tmp_dir}/ddns_revoke.$$.ini"
+	ddns_temp="${ddns_dir}/${ddns_credentials}.ini"
 	get_ddns_creds > "${ddns_temp}" && chmod 644 "${ddns_temp}"
 
 	# On LetsEncrypt remove eab-xxx related vars
@@ -429,9 +435,6 @@ do_revoke () {
 
 	set +x
 
-	# Eliminamos fichero temporal de claves ddns
-	rm -f "${ddns_temp}"
-
 	# disable entry from sites file
 	ini_write "${sites_info}" "$1" "cert_enabled" 0
 }
@@ -452,7 +455,7 @@ do_renove () {
 	parse_creds "${acme_credentials}"
 
 	# create temp file with ddns keys. Set proper perms
-	ddns_temp="${tmp_dir}/ddns_renove.$$.ini"
+	ddns_temp="${ddns_dir}/${ddns_credentials}.ini"
 	get_ddns_creds > "${ddns_temp}" && chmod 640 "${ddns_temp}"
 
     # call to certbot. On letsencrypt remove eab- related variables
@@ -480,8 +483,6 @@ do_renove () {
     # al servidor destino
     [ "${install}" -eq 1 ] && install_certificate "$1"
 
-	# Eliminamos fichero temporal de claves ddns
-	rm -f "${ddns_temp}"
 }
 
 # renove all existing certificates
@@ -543,9 +544,15 @@ usage () {
 #
 
 # Creamos (si no están ya creados) los directorios de logs y temporales
-mkdir -p "${log_dir}" "${tmp_dir}"
-chown root:root "${log_dir}" "${tmp_dir}"
-chmod 750 "${log_dir}" "${tmp_dir}"
+mkdir -p "${log_dir}" "${tmp_dir}" "${ddns_dir}"
+chown root:root "${log_dir}" "${tmp_dir}" "${ddns_dir}"
+chmod 750 "${log_dir}" "${tmp_dir}" "${ddns_dir}"
+
+# la carpeta ddns_dir debería estar ya creada, 
+# pero por si acaso la creamos y ajustamos permisos
+mkdir -p "${ddns_dir}"
+chown -R root:root "${ddns_dir}"
+chmod 640 "${ddns_dir}"/*.ini 2>/dev/null
 
 # Generamos un fichero de bloqueo para evitar ejecucion simulGtanea
 # de este script
@@ -579,7 +586,7 @@ while [ "Z${1}" != "Z" ]; do
 		shift; mailto=1 ; shift 
 		;;
 	"Z-f" | "Z--force" ) 
-		force="--force-renuewal" ;	shift
+		force="--force-renewal" ;	shift
 		;;
 	"Z-E" | "Z--enable" ) 
 		action="enable"; enabled=1 ; 
@@ -624,10 +631,6 @@ while [ "Z${1}" != "Z" ]; do
     esac
 done
 
-# prevent execution of this script if any command fails, 
-# or if any command in a pipeline fails
-set -euo pipefail
-
 # Verificamos que sea el usuario "root" quien ejecuta el programa
 if [ $UID -ne 0 ]; then
        die 1 "Debe ejecutar este script como root" 
@@ -638,8 +641,8 @@ for i in "${acme_creds}" "${ddns_keys}" "${sites_info}"; do
 	if [ ! -f "$i" ]; then
 		die 1 "File '$i' does not exist"
 	fi
-	if ! stat -c "%A %u %g" "$i" | grep -Fq -- '-rw-r----- 0 0'; then
-		die 1 "File '$i' is not owned by root or has wrong permissions. Must be '-rw-r----- 1 root root'"
+	if ! stat -c "%A %u %g" "$i" | grep -q -- '-rw-r----- 0 0'; then
+		die 1 "File '$i' is not owned by root or has wrong permissions."
 	fi
 done
 
@@ -687,5 +690,6 @@ if [ -n "${mailto}" ]; then
 fi
 
 # eso es todo, amigos
+rm -rf /tmp/certmanager.lock /tmp/certmanager
 log "Proceso completado"
 die 0
