@@ -221,7 +221,11 @@ parse_creds () {
     fi 
 }
 
-# extract ddns info and store in temporary file
+
+# Extract ddns credentials from ddns_keys file. Notice perms.
+# we regenerate this file to take care on credentials files change
+# Certbot will save this file in its configuration for renewall,
+# so don't remove it once generated
 get_ddns_creds () {
 	if [ ! -f "${ddns_keys}" ]; then
 		die 1 "DNS sites conf file \"${ddns_keys}\" does not exist" 
@@ -231,9 +235,15 @@ get_ddns_creds () {
     elif ! (ini_list_sections "${ddns_keys}" | grep -q "${ddns_credentials}") ; then
 		die 1 "DNS section \"${ddns_credentials}\" is not declared in \"${ddns_keys}\""
     else
+		ddns_temp="${ddns_dir}/${ddns_credentials}.ini.tmp"
 		# finalmente procesamos los datos de la seccion
-		ini_get_all "${ddns_keys}" "${ddns_credentials}"
+		# utilizamos un fichero temporal para evitar problemas de concurrencia
+		ini_get_all "${ddns_keys}" "${ddns_credentials}" > "${ddns_temp}"
+		cmp -s "${ddns_temp}" "${ddns_dir}/${ddns_credentials}.ini" || \
+			mv "${ddns_temp}" "${ddns_dir}/${ddns_credentials}.ini"
+		chmod 640 "${ddns_dir}/${ddns_credentials}.ini"
 	fi
+	echo "${ddns_dir}/${ddns_credentials}.ini"
 	return 0
 }
 
@@ -312,11 +322,8 @@ do_create () {
 	domains="-d $1 "
 	[ -n "${cert_alt_names}" ] && domains="-d ${1} -d ${cert_alt_names/,/ -d /}"
 	
-	# extract ddns credentials from ddns_keys file. Notice perms
-	# we regenerate this file to take care on credentials files change
-	# certbot will save this file in its configuration for renewall
-	ddns_temp="${ddns_dir}/${ddns_credentials}.ini"
-	get_ddns_creds > "${ddns_temp}" && chmod 640 "${ddns_temp}"
+	# creamos un fichero temporal con las credenciales DDNS. 
+	ddns_temp=$(get_ddns_creds)
 
 	# On LetsEncrypt remove eab-xxx related vars
 	[ -n "${eab-kid}" ]	&& eab_data="--eab-kid ${acme_kid} --eab-hmac-key ${acme_hmac_key}"
@@ -360,9 +367,8 @@ do_delete () {
 	fi 
 	parse_creds "${acme_credentials}"
 
-	# create temp file with ddns keys. Notice permissions
-	ddns_temp="${ddns_dir}/${ddns_credentials}.ini"
-	get_ddns_creds > "${ddns_temp}" && chmod 640 "${ddns_temp}"
+	# creamos un fichero temporal con las credenciales DDNS. 
+	ddns_temp=$(get_ddns_creds)
 
 	# Revoke certificate (not really needed, but...)
     do_revoke "$1"
@@ -411,9 +417,8 @@ do_revoke () {
 	fi 
 	parse_creds "${acme_credentials}"
 	
-	# create temp file with ddns keys with proper perms
-	ddns_temp="${ddns_dir}/${ddns_credentials}.ini"
-	get_ddns_creds > "${ddns_temp}" && chmod 644 "${ddns_temp}"
+	# creamos un fichero temporal con las credenciales DDNS. 
+	ddns_temp=$(get_ddns_creds)
 
 	# On LetsEncrypt remove eab-xxx related vars
 	[ -n "${eab-kid}" ] && eab_data="--eab-kid ${acme_kid} --eab-hmac-key ${acme_hmac_key}"
@@ -454,10 +459,9 @@ do_renove () {
 		return
 	fi 
 	parse_creds "${acme_credentials}"
-
-	# create temp file with ddns keys. Set proper perms
-	ddns_temp="${ddns_dir}/${ddns_credentials}.ini"
-	get_ddns_creds > "${ddns_temp}" && chmod 640 "${ddns_temp}"
+	
+	# creamos un fichero temporal con las credenciales DDNS. 
+	ddns_temp=$(get_ddns_creds)
 
     # call to certbot. On letsencrypt remove eab- related variables
 	[ -n "${eab-kid}" ] && eab_data="--eab-kid ${acme_kid} --eab-hmac-key ${acme_hmac_key}"
@@ -657,9 +661,6 @@ else
 	source "${ini_parser}"
 fi
 
-# rewrite trap to call die() on exit, and remove lockfile
-trap '_ini_cleanup_temp_files; _ini_cleanup_locks; die 0' EXIT
-
 # An action must be requested
 if [ "Z${action}" = "Z" ]; then
 	die 1 "No action requested. Use '$0 --help' to see options" 
@@ -691,6 +692,6 @@ if [ -n "${mailto}" ]; then
 fi
 
 # eso es todo, amigos
-rm -rf /tmp/certmanager.lock /tmp/certmanager
+rm -rf ${lock_file} ${tmp_dir}
 log "Proceso completado"
 die 0
