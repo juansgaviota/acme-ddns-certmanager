@@ -826,7 +826,7 @@ function ini_write() {
         if [[ $in_section -eq 1 && "$line" =~ $other_sec_re ]]; then
             # Add the key-value pair if we haven't found it yet
             if [[ $found_key -eq 0 ]]; then
-                echo "$key=$value" >> "$temp_file"
+                echo "$key = $value" >> "$temp_file"
                 found_key=1
             fi
             in_section=0
@@ -834,7 +834,7 @@ function ini_write() {
         
         # Update the key if it exists in the current section
         if [[ $in_section -eq 1 && "$line" =~ $key_pattern ]]; then
-            echo "$key=$value" >> "$temp_file"
+            echo "$key = $value" >> "$temp_file"
             found_key=1
             continue
         fi
@@ -845,7 +845,7 @@ function ini_write() {
     
     # Add the key-value pair if we're still in the section and haven't found it
     if [[ $in_section -eq 1 ]] && [[ $found_key -eq 0 ]]; then
-        echo "$key=$value" >> "$temp_file"
+        echo "$key = $value" >> "$temp_file"
     fi
     
     # Create backup before atomic operation
