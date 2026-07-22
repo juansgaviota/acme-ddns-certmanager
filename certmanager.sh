@@ -115,7 +115,7 @@ die () {
 		rm -f "${log_file}"; 
 	fi
 	# limpiamos fichero de lock.
-	rm -rf "${lock_file} ${tmp_dir}"
+	rm -rf "${lock_file}" "${tmp_dir}"
 	exit "${exitcode}"
 }
 
@@ -583,7 +583,7 @@ fi
 while [ "Z${1}" != "Z" ]; do
     case "Z${1}" in
 	"Z-?" | "Z-h" | "Z--help" ) 
-		usage; die 0 
+		usage; die 0 ""
 		;;
 	"Z-v" | "Z--verbose" ) 
 		verbose="--verbose"
@@ -712,6 +712,6 @@ if [ -n "${mailto}" ]; then
 fi
 
 # eso es todo, amigos
-rm -rf ${lock_file} ${tmp_dir}
+rm -rf "${lock_file}" "${tmp_dir}"
 log "Proceso completado"
-die 0
+die 0 ""
