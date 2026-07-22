@@ -513,6 +513,12 @@ do_enable () {
 		die 1 "Certificate '$1' is not declared in ${sites_info}"
 	else
 		ini_write "${sites_info}" "$1" "cert_enabled" "$2"
+		# enable/disable also in certbot configuration
+		cb_conf="/etc/letsencrypt/renewal/${1}.conf"
+		if [ -f "${cb_conf}" ]; then
+			enable="False";  [ "$2" = "1" ] && enable="True"
+			ini_write "${cb_conf}" "renewalparams" "autorenove" "${enable}"	
+		fi
 	fi
 }
 
