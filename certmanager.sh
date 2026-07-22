@@ -5,7 +5,7 @@
 # 
 #
 Author="Juan Antonio Martínez <juanantonio.martinez@upm.es>"
-Version="1.1 2026-07-08"
+Version="1.2 2026-07-22"
 License="MIT (https://opensource.org/license/mit)"
 
 #
@@ -531,22 +531,26 @@ usage () {
 	echo "License: $License"
 	echo "Available docs: ${DOCDIR}"
 	echo ""
-	echo "Usage: $0 options"
+	echo "Usage: $0 <action> [options] [cert_name]"
+	echo ""
+	echo "  Actions:"
+	echo "  list                    List current certificates"
+	echo "  create                  Create/renew certificate"
+	echo "  delete                  Delete certificate"
+	echo "  revoke                  Revoke certificate"
+	echo "  renove                  Force certificate renewal"
+	echo "  renove-all              Renew all certs next to expire (30 days or less)"
+	echo "  enable                  Mark certificate as active in conf file"
+	echo "  disable                 Mark certificate as inactive in conf file"
+	echo "  install                 Install/remove certificate into (remote) server"
+	echo ""
 	echo "  Options:"
-	echo "  -? | -h | --help        show usage and exit"
+	echo "  -? | -h | --help        Show usage and exit"
 	echo "  -v | --verbose          Send certmanager/certbot logs to console (def: don't)"
 	echo "  -l | --list             List current certificates"
 	echo "  -f | --force            Force certbot to renew/create even if not expired"
-	echo "  -c | --create <name>    Create/renove certificate <name>"
-	echo "  -d | --delete <name>    Delete certificate <name>"
-	echo "  -R | --revoke <name>    Revoke certificate <name>"
-	echo "  -E | --enable <name>    Mark certificate <name> as active in conf file"
-	echo "  -D | --disable <name>   Mark certificate <name> as inactive in conf file"
-	echo "  -a | --renove-all       Renew all certs next to expire (30 days or less)"
-	echo "  -r | --renove <name>    Force renove certificate <name>"
-	echo "  -m | --mail <addr>      Send log via mail to addr"
-	echo "  -i | --install          Install/remove certificate into (remote) server"
-	echo "                          (default is do not install )"
+	echo "  -i | --install          copy created/renoved cert. to (remote) server"
+	echo "  -m | --mail <addr>      Send log via mail to addr"  
 	echo ""
 }
 
@@ -590,55 +594,54 @@ while [ "Z${1}" != "Z" ]; do
 		quiet="--quiet"
 		shift
 		;;
-	"Z-i" | "Z--install" ) 
-		install=1 ; shift 
-		;;
 	"Z-m" | "Z--mail" ) 
 		shift; mailto=1 ; shift 
 		;;
 	"Z-f" | "Z--force" ) 
-		force="--force-renewal" ;	shift
+		force="--force-renewal" ; shift
 		;;
-	"Z-E" | "Z--enable" ) 
-		action="enable"; enabled=1 ; 
-		shift; cert_name=$1; shift
+	"Z-i" | "Z--install" )
+		install=1 ; shift	
 		;;
-	"Z-D" | "Z--disable" ) 
-		action="enable"; enabled=0 ;
-		shift; cert_name=$1; shift
+	"Zenable" ) 
+		action="enable"; enabled=1 ; shift
+		[ "$action" != "" ] && die 1 "Doble comando: '${action}' y 'list'" 
 		;;
-	"Z-l" | "Z--list" ) 
+	"Zdisable" ) 
+		[ "$action" != "" ] && die 1 "Doble comando: '${action}' y 'list'" 
+		action="enable"; enabled=0 ; shift
+		;;
+	"Zlist" ) 
 		[ "$action" != "" ] && die 1 "Doble comando: '${action}' y 'list'" 
 		action="list"; shift
 		;;
-	"Z-c"  | "Z--create" )
+	"Zcreate" )
 		[ "$action" != "" ] && die 1 "Doble comando '${action}' y 'create'" 
-		action="create"; shift;
-		cert_name=$1; shift;
+		action="create"; shift
 		;;
-	"Z-d"  | "Z--delete" )
+	"Zdelete" )
 		[ "$action" != "" ] && die 1 "Doble comando '${action}' y 'delete'"
-		action="delete"; shift;
-		cert_name=$1; shift;
+		action="delete"; shift
 		;;
-	"Z-R"  | "Z--revoke" )
+	"Zrevoke" )
 		[ "$action" != "" ] && die 1 "Doble comando '${action}' y 'revoke'"
-		action="revoke"; shift;
-		cert_name=$1; shift;
+		action="revoke"; shift
 		;;
-	"Z-r"  | "Z--renove" )
+	"Zrenove" )
 		[ "$action" != "" ] && die 1 "Doble comando '${action}' y 'renove'"
-		action="renove"; shift;
-		cert_name=$1; shift;
+		action="renove"; shift
 		;;
-	"Z-a"  | "Z--renove-all" )
+	"Zrenove-all" )
 		[ "$action" != "" ] && die 1 "Doble comando '${action}' y 'renove-all"
 		action="renove-all"; shift;
 		;;
+	"Zinstall" )
+		[ "$action" != "" ] && die 1 "Doble comando '${action}' y 'renove-all"
+		action="install"; shift;
+		;;
 	* )
-		error "CertManager: Parametros incorrectos"
-		usage
-		die 0
+		cert_name="$1"; shift
+		;;
     esac
 done
 
@@ -680,15 +683,25 @@ elif ! ini_validate "$sites_info" ; then
 fi
 
 # Everything seems ok. Check action
+done=0
 case "$action" in
-	"list" ) do_list ;;
-	"create" ) do_create "${cert_name}" ;;
-	"delete" ) do_delete "${cert_name}" ;;
-	"revoke" ) do_revoke "${cert_name}" ;;
-	"renove" ) do_renove "${cert_name}" ;;
-	"renove-all" ) do_renove_all ;;
-	"enable" ) do_enable "${cert_name}" ${enabled};;
+	"list" ) do_list; done=1 ;;
+	"renove-all" ) do_renove_all; done=1;;
 esac
+
+if [ ${done} -eq 0 ]; then
+	# si la accion requiere un nombre de certificado,
+	# comprobamos que se haya dado
+	[ -z "${cert_name}" ] && die 1 "No certificate name provided. Use '$0 --help' to see options"
+	case "$action" in
+		"create" ) do_create "${cert_name}" ;;
+		"delete" ) do_delete "${cert_name}" ;;
+		"revoke" ) do_revoke "${cert_name}" ;;
+		"renove" ) do_renove "${cert_name}" ;;
+		"enable" ) do_enable "${cert_name}" ${enabled};;
+		"install" ) install_certificate "${cert_name}" ;;
+	esac
+fi
 
 # si se ha definido, mandar correo al CdC
 if [ -n "${mailto}" ]; then
