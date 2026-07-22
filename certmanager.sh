@@ -571,6 +571,7 @@ chmod 640 "${ddns_dir}"/*.ini 2>/dev/null
 
 # Generamos un fichero de bloqueo para evitar ejecucion simulGtanea
 # de este script
+# do not call die here, as it will remove lock file
 if ! lockfile -r 0 "${lock_file}" ; then
         error "Hay un 'certmanager' en ejecucion"
         error "Si lo anterior no es correcto, borre el fichero '${lock_file}' y pruebe de nuevo"
@@ -679,7 +680,7 @@ fi
 if [ ! -f "$sites_info" ]; then
 	die 1 "DNS and certs destination info file '$sites_info' does not exist" 
 elif ! ini_validate "$sites_info" ; then
-	die "DNS and certs destination info '$sites_info' is not a valid .ini file" 
+	die 1 "DNS and certs destination info '$sites_info' is not a valid .ini file" 
 fi
 
 # Everything seems ok. Check action
