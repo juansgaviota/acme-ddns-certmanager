@@ -605,12 +605,12 @@ while [ "Z${1}" != "Z" ]; do
 		install=1 ; shift	
 		;;
 	"Zenable" ) 
+		[ "$action" != "" ] && die 1 "Doble comando: '${action}' y 'enable'" 
 		action="enable"; enabled=1 ; shift
-		[ "$action" != "" ] && die 1 "Doble comando: '${action}' y 'list'" 
 		;;
 	"Zdisable" ) 
-		[ "$action" != "" ] && die 1 "Doble comando: '${action}' y 'list'" 
-		action="enable"; enabled=0 ; shift
+		[ "$action" != "" ] && die 1 "Doble comando: '${action}' y 'disable'"
+		action="disable"; enabled=0 ; shift
 		;;
 	"Zlist" ) 
 		[ "$action" != "" ] && die 1 "Doble comando: '${action}' y 'list'" 
