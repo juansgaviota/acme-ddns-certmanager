@@ -3,7 +3,7 @@
 INSTALL=$(which install)
 [ -n "${INSTALL}" ] || INSTALL="install"
 
-conffiles="etc/acme_creds.ini etc/ddns_keys.ini etc/sites.ini"
+conffiles="etc/acme_creds.ini etc/ddns_keys.ini etc/sites.ini etc/mailer.ini"
 binfiles="certmanager.sh tsig2ini.sh"
 libfiles="lib_ini.sh install.sh"
 docfiles="certmanager.LICENSE lib_ini.LICENSE README.md"

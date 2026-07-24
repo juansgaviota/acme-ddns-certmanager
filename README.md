@@ -53,6 +53,9 @@ Para la distribución de los certificados a la máquina destino, se precisa de p
 deberá tener instalado openssh-server y configurado de manera que se permita el acceso sin contraseña, esto es: por clave pública/privada (en el fichero **/root/.ssh/authorized_keys**)
 > sudo apt install ssh
 
+En los casos en que no es posible la distribución automática del certificado, los datos se envian por correo electrónico al solicitante. Para poder realizar esta tarea es necesaria la instalación del paquete *sendemail* ( no confundir con "sendmail" )
+> sudo apt install sendemail
+
 ### Descarga e instalación
 
 Para instalar la aplicación:
@@ -67,9 +70,9 @@ Para instalar la aplicación:
 - Como usuario "root" ejecutar *install.sh*
 
 - Una vez instalado, seguir las instrucciones para personalizar los diversos ficheros de configuración, así como configurar DNS para que permita validación DNS-01  
-**IMPORTANTE** los ficheros bajo la carpeta /etc/certmanager deben estar con permisos root:root y protegidos contra lectura/escritura pública
+**IMPORTANTE** los ficheros bajo la carpeta /etc/certmanager deben estar con permisos root:root y protegidos contra lectura/escritura pública (640)
 
-- La instalación de certbot programa automáticamente un timer para ejecutar dicha aplicación de manera periódica. Puesto que en este caso certbot se ejecuta desde CertManager, hay que desactivar dicho timer:
+- (opcional) La instalación de certbot programa automáticamente un timer para ejecutar dicha aplicación de manera periódica. Puesto que en este caso certbot se ejecuta desde CertManager, hay que desactivar dicho timer:
     > sudo systemctl disable --now certbot.timer
 
 ## Ejecución
@@ -329,8 +332,9 @@ En el fichero **sites.ini** se indican todos los datos para poder
 gestionar y distribuir cada uno de los certificados. Esto incluye
 
 - Datos del certificado
+- Email del solicitante
 - Credenciales acme
-- Datos de acceso al dns dinámico
+- Credenciales de acceso al dns dinámico
 - Información para instalación en servidor destino
 - Estado habilitado/deshabilitado de la entrada de este certificado
 
@@ -373,6 +377,8 @@ acme_credentials = "user1"
 # Datos de instalación del certificado en el host destino
 # Nombre del host en el que se va a ubicar el certificado. (Requerido)
 cert_host = "host.domain.upm.es"
+# Direccion de correo del solicitante del certificado
+cert_requester = "owner.mail@domain.upm.es"
 # Si no están definidos, el certificado no se intenta distribuir
 key_path = "/etc/ssl/private/"
 cert_path = "/etc/ssl/certs/"
@@ -383,6 +389,25 @@ cert_host = "host.sub.example.com"
 cert_alt_names = ""
 cert_enabled = 0
 ```
+
+### Configuración de las notificaciones por correo
+
+Cuando no es posible realizar una instalación automática de los certificados
+debido a que no existen paths de instalación definidos, ''certmanager.sh'' empaqueta los certificados en un fichero ''.tar.gz'' y lo envía por correo al solicitante del certificado.
+Para podere realizar esta acción es preciso definir el mailer y las credenciales del usuario que va a enviar el correo.
+
+Para ello editaremos el fichero /etc/certmanager/mailer.ini, indicando los parámetros
+adecuados
+
+```text
+[mailer]
+smtp_server = "localhost"
+smtp_port = 587
+smtp_username = "user@example.com"
+smtp_password = "password"
+```
+
+Si este fichero no existe o está incompleto, no se ejecuta acción alguna
 
 ## Renovación automática de certificados
 
