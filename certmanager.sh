@@ -293,6 +293,9 @@ send_certificate() {
 	tgzfile="${tmp_dir}"/"${cert_name}"-"${fecha}".tgz
 	tar zhcCf "${from}" "${tgzfile}" "${cert_name}"
 
+	# on verbose mode, show sendemail invocation
+	[ -n "${verbose}"  ] && set -x
+
 	# invocamos el comando para el envio de correo
 	sendemail -f "${smtp_username}" -t "${cert_requester}" \
 		-xu "${smtp_username}" -xp "${smtp_password}" \
@@ -300,8 +303,10 @@ send_certificate() {
 		-a "${tgzfile}" \
 		-u "Certificado para el dominio ${cert_name}" \
 		-l "${log_file}" -o tls=auto -q \
-		-m "Se adjuntan los certificados para el dominio ${cert_name}\nUn saludo."
-	return $?
+		-m "Se adjuntan los nuevos certificados para el dominio ${cert_name}\nUn saludo."
+	set +x
+
+	return 0
 }
 
 # install certificate in destination server
