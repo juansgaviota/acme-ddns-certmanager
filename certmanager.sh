@@ -40,6 +40,9 @@ sites_info="${CONFDIR}/sites.ini"
 # Fichero .ini que contiene las claves de acceso al servidor DNS para la validación ACME
 ddns_keys="${CONFDIR}/ddns_keys.ini"
 
+# Fichero .ini que contiene la configuracion para envio de correo electrónico
+email_info="${CONFDIR}/mailer.ini"
+
 # Carpeta donde se regeneran las claves temporales para la validación ACME
 # certbot guarda en su configuración estos datos a la hora 
 # de proceder a la renovación de certificados, por lo que una
@@ -79,12 +82,13 @@ cert_host="" 		# host donde instalar el certificado
 key_path="" 		# carpeta donde guardar la clave en el host destino
 cert_path="" 		# donde guardar el certificado en el host destino
 chain_path="" 		# donde guardar la cadena de certificados
+# flag que indica que se deben mandar los certificados por correo
+send_email=0
 
 # variables relacionadas con el certificado
 cert_name="" 		# CommonName (CN). Debe ser una sección del sites_info
 cert_alt_names=""	# SubjectAlternativeNames
 cert_enabled="" 	# flag para procesar o no esta seccion del sites_info
-
 
 # send extra info to log file
 trace() {
@@ -176,16 +180,39 @@ parse_site () {
 		error "Seccion de configuración DDNS \"$ddns_credentials}\" no existe"
 		return 3
 	fi
+
 	# comprobamos si las credenciales acme EAB están declaradas en el fichero de credenciales
 	if !  ini_section_exists "${acme_creds}" "${acme_credentials}"; then
 		error "Seccion de configuración ACME \"$acme_credentials}\" no existe"
 		return 3
 	fi
+
+	send_email=0 # default is use scp
+	# comprobamos si el solicitante del certificado está definido
+	# si está definido, se comprueba que corresponda con un email válido
+	cert_requester=$(ini_read "${sites_info}" "$1" "cert_requester")
+	if [ -n "${cert_requester}" ]; then
+		if ! echo "${cert_requester}" | grep -qE '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'; then
+			error "El solicitante del certificado '$cert_requester' no es un email válido"
+			return 3
+		fi
+	fi
+
 	# por ultimo comprobamos que los paths de instalación estén declarados
 	# pues son necesarios cuando cert_enabled=1
+	# si no estan declarados, en lugar de instalar certificados
+	# los enviamos por correo al solicitante del certificado (cert_requester)
 	if [ -z "${key_path}" ] || [ -z "${cert_path}" ] || [ -z "${chain_path}" ]; then
-		error "Los directorios de instalación del certificado no están declarados"
-		return 3
+		if [ -z "${cert_requester}" ]; then
+			error "Los directorios de instalación del certificado no están declarados" 
+			error "No se ha definido un correo electrónico del solicitante del certificado"
+			return 3
+		else
+			log "Los directorios de instalación del certificado no están declarados"
+			log "Se enviará el certificado por correo a ${cert_requester}"
+			send_email=1
+			return 0
+		fi
 	fi
 	# todo correcto. retornar OK
 	return 0
@@ -247,6 +274,36 @@ get_ddns_creds () {
 	return 0
 }
 
+# send certificate to cert_requester email address.
+send_certificate() {
+	# check for sendemail command
+	if ! command -v sendemail >/dev/null 2>&1; then
+		error "sendemail command not found. Please install it to send emails"
+		return 1
+	fi
+	# leemos la configuracion de envio de correo
+	smtp_server=$(ini_read "${email_info}" "mailer" "smtp_server")
+	smtp_port=$(ini_read "${email_info}" "mailer" "smtp_port")
+	smtp_username=$(ini_read "${email_info}" "mailer" "smtp_username")
+	smtp_password=$(ini_read "${email_info}" "mailer" "smtp_password")
+
+	# generamos un fichero temporal .tgz con los datos del certificado
+	fecha=$(date +"%Y%m%d_%H%M")
+	from=/etc/letsencrypt/live
+	tgzfile="${tmp_dir}"/"${cert_name}"-"${fecha}".tgz
+	tar zhcCf "${from}" "${tgzfile}" "${cert_name}"
+
+	# invocamos el comando para el envio de correo
+	sendemail -f "${smtp_username}" -t "${cert_requester}" \
+		-xu "${smtp_username}" -xp "${smtp_password}" \
+		-s "${smtp_server}:${smtp_port}" \
+		-a "${tgzfile}" \
+		-u "Certificado para el dominio ${cert_name}" \
+		-l "${log_file}" -o tls=auto -q \
+		-m "Se adjuntan los certificados para el dominio ${cert_name}\nUn saludo."
+	return $?
+}
+
 # install certificate in destination server
 # if server host is not defined in sites .ini file, notice and ignore
 # $1: certificate CN name (section in ini file)
@@ -255,17 +312,22 @@ install_certificate () {
 	# parse site. on error notify and return
 	if ! parse_site "$1"; then
 		log "Install certificate into remote host disabled or not posible"
-		# PENDING: try to send cert via email to cert owner
-		return
+		return 1
 	fi
-	fromdir="/etc/letsencrypt/live/${1}/"
-	[ -n "${cert_path}" ] && \
-		${SCP} "${fromdir}/cert.pem" "${cert_host}":"${cert_path}/${1}_cert.pem"
-	[ -n "${key_path}" ] && \
-		${SCP} "${fromdir}/privkey.pem" "${cert_host}":"${key_path}/${1}_key.pem"
-	[ -n "${chain_path}" ] && \
-		${SCP} "${fromdir}/fullchain.pem" "${cert_host}":"${chain_path}/${1}_chain.pem"
-	${SSH} "${cert_host}" update-ca-certificates
+	# intentamos copia directa. si los paths están definidos
+	if [ ${send_email} -eq 0 ]; then
+		fromdir="/etc/letsencrypt/live/${1}/"
+		[ -n "${cert_path}" ] && \
+			${SCP} "${fromdir}/cert.pem" "${cert_host}":"${cert_path}/${1}_cert.pem"
+		[ -n "${key_path}" ] && \
+			${SCP} "${fromdir}/privkey.pem" "${cert_host}":"${key_path}/${1}_key.pem"
+		[ -n "${chain_path}" ] && \
+			${SCP} "${fromdir}/fullchain.pem" "${cert_host}":"${chain_path}/${1}_chain.pem"
+		${SSH} "${cert_host}" update-ca-certificates
+	else
+		# enviamos el certificado por correo
+		send_certificate "${1}"
+	fi
 }
 
 # remove certificate in destination server
@@ -686,7 +748,14 @@ fi
 if [ ! -f "$sites_info" ]; then
 	die 1 "DNS and certs destination info file '$sites_info' does not exist" 
 elif ! ini_validate "$sites_info" ; then
-	die 1 "DNS and certs destination info '$sites_info' is not a valid .ini file" 
+	die 1 "DNS and certs destination info file '$sites_info' is not a valid .ini file" 
+fi
+
+# Check for mailer info .ini file
+if [ ! -f "${email_info}" ]; then
+	die 1 "Email configuration info file '$email_info' does not exist" 
+elif ! ini_validate "${email_info}" ; then
+	die 1 "Email configuration info file '$email_info' is not a valid .ini file"
 fi
 
 # Everything seems ok. Check action
