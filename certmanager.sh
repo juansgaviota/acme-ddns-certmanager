@@ -578,6 +578,12 @@ if ! lockfile -r 0 "${lock_file}" ; then
 		exit 1
 fi
 
+# JAMC 20260724 este script puede ser invocado como renewal-hook de certbot, 
+# en cuyo caso hay que extraer cert_name de la variable de entorno RENEWED_LINEAGE
+if [ -n "${RENEWED_LINEAGE}" ]; then
+	cert_name=$(basename "${RENEWED_LINEAGE}")
+fi
+
 # 
 # analizamos argumentos de la linea de comandos
 while [ "Z${1}" != "Z" ]; do
