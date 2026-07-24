@@ -303,9 +303,11 @@ send_certificate() {
 		-a "${tgzfile}" \
 		-u "Certificado para el dominio ${cert_name}" \
 		-l "${log_file}" -o tls=auto -q \
-		-m "Se adjuntan los nuevos certificados para el dominio ${cert_name}\nUn saludo."
+		-m "Se adjuntan los nuevos certificados para el dominio \"${cert_name}\"\nUn saludo."
 	set +x
 
+	# borramos el fichero temporal y retornamos
+	rm -f "${tgzfile}"
 	return 0
 }
 
