@@ -55,7 +55,8 @@ tmp_dir="${TMPDIR}"
 # Se borra al finalizar la ejecución salvo --verbose o error
 log_dir="${LOGDIR}"
 # fichero de logs
-log_file="${log_dir}/cert_manager.$$.log"
+fecha=$(date +"%Y%m%d_%H%M")
+log_file="${log_dir}/cert_manager.${fecha}.log"
 # fichero de bloqueo
 lock_file="${LOCKDIR}/certmanager.lock"
 
@@ -92,19 +93,19 @@ cert_enabled="" 	# flag para procesar o no esta seccion del sites_info
 
 # send extra info to log file
 trace() {
-	echo "$*" >>${log_file}
+	echo "$*" >>"${log_file}"
 } 
 
 # send message to log file. When verbose send also to console
 log () {
-	echo "$*" >>${log_file}
+	echo "$*" >>"${log_file}"
 	[ -n "${verbose}" ] && echo "$*" >&2
 }
 
 # send message to log file AND console
 error () {
 	echo "$*" >&2
-	echo "$*" >>${log_file}
+	echo "$*" >>"${log_file}"
 }
 
 # finaliza la ejecucion
@@ -404,7 +405,6 @@ do_create () {
 	certbot certonly \
 		  ${quiet} \
 		--keep-until-expiring \
-		--logs-dir ${log_dir} \
 		--dns-rfc2136 \
 		--dns-rfc2136-credentials "${ddns_temp}" \
 		--dns-rfc2136-propagation-seconds 45 \
@@ -451,7 +451,6 @@ do_delete () {
 	# and call certbot to remove. 
     certbot delete \
 		  ${quiet} \
-        --logs-dir ${log_dir} \
         --dns-rfc2136 \
         --dns-rfc2136-credentials "${ddns_temp}" \
         --dns-rfc2136-propagation-seconds 45 \
@@ -498,7 +497,6 @@ do_revoke () {
 	# call to certbot
     certbot revoke \
 		  ${quiet} \
-        --logs-dir ${log_dir} \
         --dns-rfc2136 \
         --dns-rfc2136-credentials "${ddns_temp}" \
         --dns-rfc2136-propagation-seconds 45 \
@@ -541,7 +539,6 @@ do_renove () {
     certbot renew \
 		  ${quiet} \
 		--force-renewal \
-        --logs-dir ${log_dir} \
         --dns-rfc2136 \
         --dns-rfc2136-credentials "${ddns_temp}" \
         --dns-rfc2136-propagation-seconds 45 \
