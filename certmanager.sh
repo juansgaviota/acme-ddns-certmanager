@@ -98,14 +98,16 @@ trace() {
 
 # send message to log file. When verbose send also to console
 log () {
-	echo "$*" >>"${log_file}"
+	ldate=$(date +"%Y%m%d_%H%M%S")
+	echo "${ldate}: $*" >>"${log_file}"
 	[ -n "${verbose}" ] && echo "$*" >&2
 }
 
 # send message to log file AND console
 error () {
 	echo "$*" >&2
-	echo "$*" >>"${log_file}"
+	ldate=$(date +"%Y%m%d_%H%M%S")
+	echo "${ldate}: $*" >>"${log_file}"
 }
 
 # finaliza la ejecucion
