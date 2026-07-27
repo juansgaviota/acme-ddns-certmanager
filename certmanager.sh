@@ -163,7 +163,24 @@ parse_site () {
 	cert_host=$(ini_read "${sites_info}" "$1" "cert_host")
 	# el nombre CN del certificado es el mismo que el de la sección
 	cert_name="$1"
-	cert_alt_names=$(ini_read "${sites_info}" "$1" "cert_alt_names")
+	# buscamos alternate names, 
+	cert_alt_names=""
+	alt_names=$(ini_read "${sites_info}" "$1" "cert_alt_names" | tr -d '[:space:]')
+	# comprobamos que sean una lista correcta de fqdn's para evitar
+	# problemas de inyección de código en la invocación de certbot
+	if [ -n "${alt_names}" ]; then
+		 # Expresión regular robusta para un FQDN individual
+    	local regex_fqdn="([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}"
+    	# Estructura: un FQDN obligatorio, seguido opcionalmente de más FQDNs 
+		# separados por comas
+    	local regex_lista="^${regex_fqdn}(,${regex_fqdn})*$"
+		if [[ ! "${alt_names}" =~ ${regex_lista} ]]; then
+			error "la lista de Certificate Alternative Names es inválida"
+			return 3
+		fi
+		# finalmente convertimos todo a minusculas
+		cert_alt_names=$(echo "${alt_names}" | tr '[:upper:]' '[:lower:]')
+	fi
 	#
 	# Ahora buscamos en la seccion solicitada
 	# si estos valores no estan definidos, usamos los de por defecto
@@ -239,7 +256,12 @@ parse_creds () {
 		acme_kid=$(ini_read "$acme_creds" "$user" "acme_kid")
 		acme_hmac_key=$(ini_read "$acme_creds" "$user" "acme_hmac_key")
 		acme_server=$(ini_read "$acme_creds" "$user" "acme_server")
+		# comprobamos que el email sea valido
+		# para evitar inyección de codigo al ejecutar certbot
 		acme_email=$(ini_read "$acme_creds" "$user" "acme_email")
+		if ! echo "${acme_email}" | grep -qE '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'; then
+			die 1 "La dirección '${acme_email}' de la credencial ACME no es válida"
+		fi
 		# y comprobamos que esten declaradas
 		if [ -z "$acme_kid" ] || [ -z "$acme_hmac_key" ] || [ -z "$acme_server" ] || [ -z "$acme_email" ]; then
 			log "acme_kid: $acme_kid"
@@ -318,22 +340,31 @@ send_certificate() {
 # if server host is not defined in sites .ini file, notice and ignore
 # $1: certificate CN name (section in ini file)
 install_certificate () {
-        trace "Enter install_certificate( \"$1\" )"
+    trace "Enter install_certificate( \"$1\" )"
 	# parse site. on error notify and return
 	if ! parse_site "$1"; then
 		log "Install certificate into remote host disabled or not posible"
 		return 1
 	fi
-	# intentamos copia directa. si los paths están definidos
+	# intentamos copia directa... si los paths están definidos
 	if [ ${send_email} -eq 0 ]; then
 		fromdir="/etc/letsencrypt/live/${1}/"
-		[ -n "${cert_path}" ] && \
+		# no queda claro cual hay que usar: copiamos los dos
+		if [ -n "${cert_path}" ]; then
 			${SCP} "${fromdir}/cert.pem" "${cert_host}":"${cert_path}/${1}_cert.pem"
+			${SCP} "${fromdir}/fullchain.pem" "${cert_host}":"${cert_path}/${1}_fullchain.pem"
+		fi
+		# la clave privada va a su sitio
 		[ -n "${key_path}" ] && \
 			${SCP} "${fromdir}/privkey.pem" "${cert_host}":"${key_path}/${1}_key.pem"
+		# la cadena de verificación va al suyo
 		[ -n "${chain_path}" ] && \
-			${SCP} "${fromdir}/fullchain.pem" "${cert_host}":"${chain_path}/${1}_chain.pem"
+			${SCP} "${fromdir}/chain.pem" "${cert_host}":"${chain_path}/${1}_chain.pem"
+		# actualizamos lista de CA's en máquina remota
 		${SSH} "${cert_host}" update-ca-certificates
+		# y finalmente invocamos al equipo remoto ejecutar post-install (si existe)
+		deploy_cmd="/usr/local/bin/certmanager_deploy.sh"
+		${SSH} "${cert_host}" "[ -f ${deploy_cmd} ] && ${deploy_cmd} ${1}"
 	else
 		# enviamos el certificado por correo
 		send_certificate "${1}"
@@ -775,6 +806,10 @@ if [ ${done} -eq 0 ]; then
 	# si la accion requiere un nombre de certificado,
 	# comprobamos que se haya dado
 	[ -z "${cert_name}" ] && die 1 "No certificate name provided. Use '$0 --help' to see options"
+	# verificamos que el nombre corresponda a una fqdn
+	fqdn_regex='^([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$'
+	[[ "${cert_name}" =~ $fqdn_regex ]] && die 1 "${cert_name} is not a valid FQDN domain name"
+	# ok. then handle action
 	case "$action" in
 		"create" ) do_create "${cert_name}" ;;
 		"delete" ) do_delete "${cert_name}" ;;
