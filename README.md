@@ -411,10 +411,22 @@ Si este fichero no existe o está incompleto, no se ejecuta acción alguna
 
 ## Renovación automática de certificados
 
+### Caso 1: invocación de certmanager desde certbot mediante timer
+
+'''Certbot''' instala por defecto un timer para comprobar y en su caso renovar certificados
+
+Por otro lado, '''certmanager.sh''' puede ejecutarse desde el cron para realizar la misma operación. El usuario deberá escoger qué método prefiere
+        ### Caso 1: actualización directa desde certbot ###
+
+para aprovechar los timers que utiliza certbot en combinación con CertManager.sh, lo que
+hacemos es copiar el fichero ''/usr/local/lib/certmanager/hooks/01-call_certmanager.sh''
+a la carpeta ''/etc/letsencrypt/renewal-hooks/deploy'' de manera que en el caso de crear o renovar un  certificado, se invoque Certmanager con la acción "install"
+
+### Caso 2: uso directo de certmanager desde el cron
+
 CertManager puede utilizarse para renovar y distribuir automáticamente los
 certificados. Para ello utilizaremos el servicio **cron**, editando el fichero *crontab* correspondiente
 
-Por ejemplo para procesar semanalmente, y en su caso renovar los certificados próximos a caducar antes de 30 días, generaremos una línea en el crontab
 tal que sigue:
 
 > crontab -e
@@ -425,5 +437,13 @@ tal que sigue:
 ...
 ```
 
-**NOTA** certbot instala por defecto un timer para la renovación automática de certificados. Es preciso deshabilitar este timer para poder utilizar correctamente CertManager.
+**NOTA** como certbot instala por defecto un timer para la renovación automática de certificados, Es preciso deshabilitar este timer para poder utilizar correctamente CertManager.
 Consultar el apartado de Instalación para proceder
+
+### ejecución de scripts remotos tras instalación
+
+Certmanager.sh no puede preveer todos los posibles casos de tareas a ejecutar en el equipo remoto tras la instalación de los nuevos certificados. Para ello, provee la posibilidad de definir tareas "post-install", definidas por el usuario que se ejecutarán en el equipo remoto tras la instalación
+
+Para ello deberemosm, en la máquina remota editar el script '''/usr/local/bin/certmanager_deploy.sh''', que será invocado por Certmanager tras ejecutar "install"
+
+En la carpeta '''/usr/local/lib/certmanager/hooks''' se presentan varios ejemplos, que el administrador deberá adaptar a sus necesidades
