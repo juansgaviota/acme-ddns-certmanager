@@ -6,6 +6,7 @@ INSTALL=$(which install)
 conffiles="etc/acme_creds.ini etc/ddns_keys.ini etc/sites.ini etc/mailer.ini"
 binfiles="certmanager.sh tsig2ini.sh"
 libfiles="lib_ini.sh install.sh"
+hooks=$(ls hooks/*)
 docfiles="certmanager.LICENSE lib_ini.LICENSE README.md"
 
 error () {
@@ -56,7 +57,7 @@ echo "Creando directorios..."
 mkdir -p /etc/certmanager/ddns
 chmod 750 /etc/certmanager
 mkdir -p /usr/share/doc/certmanager
-mkdir -p /usr/local/lib/certmanager
+mkdir -p /usr/local/lib/certmanager/hooks
 mkdir -p /usr/local/bin
 
 echo "Instalando ficheros..."
@@ -69,8 +70,12 @@ for i in ${conffiles}; do
 done
 # bibliotecas
 for i in ${libfiles}; do
-    ${INSTALL} -o root -g root -m 644 "$i" /usr/local/lib/certmanager/"$i"
+    ${INSTALL} -o root -g root -m 755 "$i" /usr/local/lib/certmanager/"$i"
 done
+for i in ${hooks}; do
+    ${INSTALL} -o root -g root -m 755 "hooks/$i" /usr/local/lib/certmanager/hooks/"$i"
+done
+
 # binarios
 for i in ${binfiles}; do
     "${INSTALL}" -o root -g root -m 755 "$i" /usr/local/bin/"$i"
