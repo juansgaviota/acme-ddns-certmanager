@@ -73,7 +73,8 @@ for i in ${libfiles}; do
     ${INSTALL} -o root -g root -m 755 "$i" /usr/local/lib/certmanager/"$i"
 done
 for i in ${hooks}; do
-    ${INSTALL} -o root -g root -m 755 "hooks/$i" /usr/local/lib/certmanager/hooks/"$i"
+    ${INSTALL} -o root -g root -m 755 "$i" /usr/local/lib/certmanager/"$i"
+    chmod 644 /usr/local/lib/certmanager/hooks/hooks.md
 done
 
 # binarios
