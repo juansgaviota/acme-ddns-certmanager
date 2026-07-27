@@ -349,7 +349,7 @@ install_certificate () {
 	# intentamos copia directa... si los paths están definidos
 	if [ ${send_email} -eq 0 ]; then
 		fromdir="/etc/letsencrypt/live/${1}/"
-		# no queda claro cual hay que usar: copiamos los dos
+		# no queda claro si hay que usar cert.pem o fullchain.pem: copiamos los dos
 		if [ -n "${cert_path}" ]; then
 			${SCP} "${fromdir}/cert.pem" "${cert_host}":"${cert_path}/${1}_cert.pem"
 			${SCP} "${fromdir}/fullchain.pem" "${cert_host}":"${cert_path}/${1}_fullchain.pem"
@@ -357,9 +357,9 @@ install_certificate () {
 		# la clave privada va a su sitio
 		[ -n "${key_path}" ] && \
 			${SCP} "${fromdir}/privkey.pem" "${cert_host}":"${key_path}/${1}_key.pem"
-		# la cadena de verificación va al suyo
+		# la cadena de verificación va al suyo. notese el cambio de extension
 		[ -n "${chain_path}" ] && \
-			${SCP} "${fromdir}/chain.pem" "${cert_host}":"${chain_path}/${1}_chain.pem"
+			${SCP} "${fromdir}/chain.pem" "${cert_host}":"${chain_path}/${1}_chain.crt"
 		# actualizamos lista de CA's en máquina remota
 		${SSH} "${cert_host}" update-ca-certificates
 		# y finalmente invocamos al equipo remoto ejecutar post-install (si existe)
@@ -808,7 +808,7 @@ if [ ${done} -eq 0 ]; then
 	[ -z "${cert_name}" ] && die 1 "No certificate name provided. Use '$0 --help' to see options"
 	# verificamos que el nombre corresponda a una fqdn
 	fqdn_regex='^([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$'
-	[[ "${cert_name}" =~ $fqdn_regex ]] && die 1 "${cert_name} is not a valid FQDN domain name"
+	[[ "${cert_name}" =~ ${fqdn_regex} ]] || die 1 "\"${cert_name}\" is not a valid FQDN domain name"
 	# ok. then handle action
 	case "$action" in
 		"create" ) do_create "${cert_name}" ;;

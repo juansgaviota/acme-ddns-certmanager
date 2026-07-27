@@ -88,6 +88,8 @@ which -s md2html && md2html -f --github README.md -o /usr/share/doc/certmanager/
 
 echo ""
 echo "Instalacion completada."
+echo "Recuerde instalar certmanager cron o cerbot timer para renovación automática"
+echo "En caso necesario instale en los equipos destino el hook apropiado"
 echo "Instrucciones de configuración y uso en /usr/share/doc/certmanager"
 echo "Pulse \"certmanager.sh --help\" para ver opciones"
 
