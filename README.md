@@ -354,7 +354,7 @@ ddns_credentials = "ddns-key"
 # Si no están definidos, el certificado no se intenta distribuir
 key_path = "/etc/ssl/private/"
 cert_path = "/etc/ssl/certs/"
-chain_path = "/usr/share/ca-certificates/"
+chain_path = "/usr/local/share/ca-certificates/"
 
 #
 # Lista de certificados que se gestionan
@@ -382,7 +382,7 @@ cert_requester = "owner.mail@domain.upm.es"
 # Si no están definidos, el certificado no se intenta distribuir
 key_path = "/etc/ssl/private/"
 cert_path = "/etc/ssl/certs/"
-chain_path = "/usr/share/ca-certificates/"
+chain_path = "/usr/local/share/ca-certificates/"
 
 [www.sub.example.com]
 cert_host = "host.sub.example.com"
