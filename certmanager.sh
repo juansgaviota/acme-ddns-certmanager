@@ -423,7 +423,7 @@ do_create () {
 	
 	# indicamos el CN y los SubjectAlternateNames
 	domains="-d $1 "
-	[ -n "${cert_alt_names}" ] && domains="-d ${1} -d ${cert_alt_names/,/ -d /}"
+	[ -n "${cert_alt_names}" ] && domains="-d ${1} -d ${cert_alt_names//,/ -d }"
 	
 	# creamos un fichero temporal con las credenciales DDNS. 
 	ddns_temp=$(get_ddns_creds)
